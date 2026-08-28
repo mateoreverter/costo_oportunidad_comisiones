@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<!-- v42: datos automáticos compactos, indicador de última fecha y lógica v27 intacta -->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Aranceles Balanz</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (Para Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen p-6 relative">
+
+    <!-- Pantalla de Carga (Overlay) -->
+    <div id="loader" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 hidden flex-col items-center justify-center">
+        <i data-lucide="loader-2" class="w-16 h-16 text-blue-500 animate-spin mb-4"></i>
+        <h2 class="text-2xl font-bold text-white mb-2">Procesando Operaciones...</h2>
+        <p class="text-slate-400 text-sm max-w-md text-center">Analizando el historial cronológico. Esto puede demorar unos segundos dependiendo del peso del archivo.</p>
+    </div>
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="text-blue-400"></i>
+                    Dashboard Analítico de Aranceles (USD)
+                </h1>
+                <p class="text-slate-400 text-sm">Detección automática de oportunidad de suba y baja de aranceles.</p>
+            </div>
+            <!-- Estado de actualización del reporte -->
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                <div id="estadoDatosJs" class="flex items-center gap-2.5 text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
+                    <i data-lucide="calendar-check-2" class="w-4 h-4 shrink-0"></i>
+                    <div class="leading-tight">
+                        <div class="text-[10px] uppercase tracking-wide font-semibold opacity-80">Reporte actualizado hasta</div>
+                        <div id="lblEstadoDatos" class="text-sm font-bold text-white mt-0.5">Buscando datos...</div>
+                    </div>
+                </div>
+                <button id="btnLimpiar" onclick="limpiarTodo()" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium px-3 py-2.5 rounded-lg flex items-center gap-2 transition text-sm">
+                    <i data-lucide="trash-2" class="w-4 h-4 text-red-400"></i> Limpiar Todo
+                </button>
+            </div>
+        </header>
+
+        <!-- Selector de Modo de Análisis -->
+        <div class="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-5">
+            <button id="btnModoBaja" onclick="setModoAnalisis('BAJA')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-blue-900/20 transition flex items-center gap-2">
+                <i data-lucide="trending-down" class="w-4 h-4"></i> Pérdida por Bajas (Histórico)
+            </button>
+            <button id="btnModoSuba" onclick="setModoAnalisis('SUBA')" class="bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                <i data-lucide="trending-up" class="w-4 h-4"></i>
+                <span id="lblBtnModoSuba">Potencial por Suba (a IFA 2 - 0,75%)</span>
+            </button>
+            <div id="selectorObjetivoSuba" class="hidden items-center gap-2 ml-0 sm:ml-2 bg-purple-950/30 border border-purple-800/60 rounded-lg px-3 py-1.5">
+                <label for="selectObjetivoSuba" class="text-xs font-semibold text-purple-200 whitespace-nowrap">Arancel objetivo</label>
+                <select id="selectObjetivoSuba" onchange="cambiarObjetivoSuba(this.value)" class="bg-slate-900 border border-purple-700 text-white rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer">
+                    <option value="IFA2">IFA 2 · 0,75%</option>
+                    <option value="IFA1">IFA 1 · 1,00%</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <p class="text-xs text-slate-400 font-semibold uppercase">Volumen Operado Analizado</p>
+                <h3 id="kpiVolumen" class="text-2xl font-bold text-white mt-1">u$s 0,00</h3>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <p class="text-xs text-slate-400 font-semibold uppercase">Comisión Cobrada Real</p>
+                <h3 id="kpiFeeCobrado" class="text-2xl font-bold text-emerald-400 mt-1">u$s 0,00</h3>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <p id="lblKpiTeorico" class="text-xs text-slate-400 font-semibold uppercase">Comisión Teórica (Histórica)</p>
+                <h3 id="kpiFeeTeorico" class="text-2xl font-bold text-blue-400 mt-1">u$s 0,00</h3>
+            </div>
+            <div id="boxKpiPerdida" class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm bg-red-950/20 border-red-900/40 transition-colors duration-300">
+                <p id="lblKpiPerdida" class="text-xs text-red-400 font-semibold uppercase">Costo de Oportunidad</p>
+                <h3 id="kpiPerdida" class="text-2xl font-bold text-red-400 mt-1 transition-colors duration-300">u$s 0,00</h3>
+            </div>
+        </div>
+
+        <!-- Gráficos -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <h4 id="lblChartMensual" class="text-sm font-semibold text-slate-300 mb-4">Pérdida por Mes (USD)</h4>
+                <div class="h-64 relative">
+                    <canvas id="chartMensual"></canvas>
+                </div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <h4 id="lblChartAsesores" class="text-sm font-semibold text-slate-300 mb-4">Métrica por Asesor (Top 20)</h4>
+                <div class="h-64 relative">
+                    <canvas id="chartAsesores"></canvas>
+                </div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
+                <h4 class="text-sm font-semibold text-slate-300 mb-4">Distribución de Aranceles (IFA)</h4>
+                <div class="h-64 relative">
+                    <canvas id="chartAranceles"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla con Solapas Dinámicas por Asesor -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-sm">
+            <div class="px-5 pt-4 bg-slate-900/60 border-b border-slate-700">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3">
+                    <div class="flex flex-col md:flex-row md:items-center gap-4">
+                        <h4 class="font-semibold text-slate-200 flex items-center gap-2">
+                            <i data-lucide="users" class="w-4 h-4 text-slate-400"></i> Rendimiento por Asesor
+                        </h4>
+                        <button id="btnResumenGeneral" onclick="cambiarSolapa('RESUMEN')" class="bg-blue-600 text-white border border-blue-500 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition">
+                            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> Resumen General
+                        </button>
+                        <!-- Selector único de asesor con búsqueda nativa -->
+                        <div class="relative w-full md:w-80">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500 pointer-events-none"></i>
+                            <input type="text" id="inputBuscarAsesor" list="listaAsesores" onchange="seleccionarAsesorDesdeBuscador()" onkeydown="if(event.key === 'Enter') seleccionarAsesorDesdeBuscador()" placeholder="Escribí o elegí un asesor..." autocomplete="off" class="bg-slate-800 border border-slate-600 text-white rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition w-full">
+                            <i data-lucide="chevrons-up-down" class="w-4 h-4 absolute right-3 top-2.5 text-slate-500 pointer-events-none"></i>
+                            <datalist id="listaAsesores"></datalist>
+                        </div>
+                        <span id="lblVistaSeleccionada" class="text-xs text-slate-400 whitespace-nowrap">Vista general</span>
+                    </div>
+                    <span id="cantRegistros" class="text-xs bg-slate-700 px-2.5 py-1 rounded-full text-slate-300 whitespace-nowrap">0 operaciones</span>
+                </div>
+                
+            </div>
+
+            <!-- Buscador interno de cliente -->
+            <div id="panelFiltroCliente" class="hidden px-5 py-3 bg-slate-800/80 border-b border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-2 text-sm text-slate-300">
+                    <i data-lucide="search" class="w-4 h-4"></i> Vista del Asesor: <strong id="lblAsesorActivo" class="text-white">---</strong>
+                </div>
+                <div class="w-full md:w-[450px] flex gap-2">
+                    <input type="text" id="inputClienteAsesor" list="listaClientesAsesor" onchange="aplicarFiltroCliente()" placeholder="Tipeá para buscar un cliente..." class="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    <datalist id="listaClientesAsesor"></datalist>
+                    <button onclick="limpiarFiltrosInternos()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap flex items-center gap-1 shadow-sm border border-slate-600">
+                        <i data-lucide="calendar" class="w-4 h-4"></i> Diario
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel Filtro Fecha (Drill-down) -->
+            <div id="panelFiltroFecha" class="hidden px-5 py-2.5 bg-blue-900/30 border-b border-blue-800/50 flex justify-between items-center text-sm text-blue-200">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="calendar-search" class="w-4 h-4 text-blue-400"></i>
+                    <span>Viendo detalle de operaciones del día: <strong id="lblFechaFiltro" class="text-white font-mono text-base"></strong></span>
+                </div>
+                <button onclick="limpiarFiltrosInternos()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Volver al Diario
+                </button>
+            </div>
+
+            <!-- Navegación exclusiva del drill-down de Potencial por Suba -->
+            <div id="panelNavegacionSuba" class="hidden px-5 py-2.5 bg-purple-900/30 border-b border-purple-800/50 items-center justify-between gap-4 text-sm text-purple-200">
+                <div class="flex items-center gap-2 min-w-0">
+                    <i data-lucide="route" class="w-4 h-4 text-purple-400 shrink-0"></i>
+                    <strong id="lblNavegacionSuba" class="text-white truncate"></strong>
+                </div>
+                <button onclick="volverSuba()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm whitespace-nowrap">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                    <span id="lblVolverSuba">Volver</span>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead id="tablaCabecera" class="bg-slate-900/50 text-slate-400 text-xs uppercase border-b border-slate-700"></thead>
+                    <tbody id="tablaCuerpo" class="divide-y divide-slate-700/50">
+                        <tr><td colspan="8" class="text-center py-8 text-slate-500">Esperando comision_actualizada.js...</td></tr>
+                    </tbody>
+                    <tfoot id="tablaPie" class="bg-slate-900/90 text-white font-bold border-t-2 border-slate-700 hidden"></tfoot>
+                </table>
+            </div>
+
+            <!-- Controles de Paginación -->
+            <div id="panelPaginacion" class="hidden px-5 py-3 bg-slate-900 border-t border-slate-700 flex justify-between items-center text-sm text-slate-400">
+                <div>
+                    Mostrando del <strong id="pagInicio" class="text-white">0</strong> al <strong id="pagFin" class="text-white">0</strong> de <strong id="pagTotal" class="text-white">0</strong> registros
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="cambiarPagina(-1)" id="btnPagAnt" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-white disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i> Anterior
+                    </button>
+                    <button onclick="cambiarPagina(1)" id="btnPagSig" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-white disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1">
+                        Siguiente <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        let rawData = []; 
+        let datosProcesados = [];
+        let asesoresUnicosGlobal = []; 
+        
+        let modoAnalisis = 'BAJA'; 
+        let solapaActiva = 'RESUMEN'; 
+        let filtroFechaActivo = null; 
+        let clienteSubaActivo = null;
+        let mesSubaActivo = null;
+        let objetivoSubaActivo = 'IFA2';
+        let fuenteDatosActiva = 'NINGUNA';
+
+        const OBJETIVOS_SUBA = {
+            IFA2: { codigo: 2, tasa: 0.0075, etiqueta: 'IFA 2', porcentaje: '0,75%' },
+            IFA1: { codigo: 1, tasa: 0.01, etiqueta: 'IFA 1', porcentaje: '1,00%' }
+        };
+        
+        let chartMensualInstance = null;
+        let chartAsesoresInstance = null;
+        let chartArancelesInstance = null;
+        
+        let idGlobalContador = 0; 
+        let paginaActual = 1;
+        const REGISTROS_POR_PAGINA = 100;
+        let listaGlobalA_Paginar = [];
+
+        function obtenerObjetivoSuba() {
+            return OBJETIVOS_SUBA[objetivoSubaActivo] || OBJETIVOS_SUBA.IFA2;
+        }
+
+        function esElegibleParaSuba(codigoIFA) {
+            if (objetivoSubaActivo === 'IFA1') {
+                return codigoIFA === 2 || codigoIFA === 3 || codigoIFA === 4 || codigoIFA === 12;
+            }
+            return codigoIFA === 3 || codigoIFA === 4 || codigoIFA === 12;
+        }
+
+        function actualizarCalculosSuba() {
+            const tasaObjetivo = obtenerObjetivoSuba().tasa;
+            datosProcesados.forEach(d => {
+                d.esElegibleSuba = esElegibleParaSuba(d.codigoIFA);
+                if (d.esElegibleSuba) {
+                    d.feeTeoricoSubaUSD = d.brutoUSD * tasaObjetivo;
+                    d.costoOportunidadSubaUSD = Math.max(0, d.feeTeoricoSubaUSD - d.comisionUSD);
+                } else {
+                    d.feeTeoricoSubaUSD = d.comisionUSD;
+                    d.costoOportunidadSubaUSD = 0;
+                }
+            });
+        }
+
+        function actualizarEtiquetasObjetivoSuba() {
+            const objetivo = obtenerObjetivoSuba();
+            document.getElementById('lblBtnModoSuba').innerText = `Potencial por Suba (a ${objetivo.etiqueta} - ${objetivo.porcentaje})`;
+            document.getElementById('selectObjetivoSuba').value = objetivoSubaActivo;
+            if (modoAnalisis === 'SUBA') {
+                document.getElementById('lblKpiTeorico').innerText = `Comisión Objetivo (${objetivo.etiqueta})`;
+            }
+        }
+
+        function cambiarObjetivoSuba(objetivo) {
+            if (!OBJETIVOS_SUBA[objetivo]) return;
+            objetivoSubaActivo = objetivo;
+            clienteSubaActivo = null;
+            mesSubaActivo = null;
+            actualizarCalculosSuba();
+            actualizarEtiquetasObjetivoSuba();
+            if (modoAnalisis === 'SUBA' && datosProcesados.length > 0) procesarYRenderizar(true);
+        }
+
+        // Cambio de Modo (BAJA vs SUBA)
+        function setModoAnalisis(modo) {
+            modoAnalisis = modo;
+            clienteSubaActivo = null;
+            mesSubaActivo = null;
+            document.getElementById('panelNavegacionSuba').classList.add('hidden');
+            document.getElementById('panelNavegacionSuba').classList.remove('flex');
+            
+            // UI Toggle
+            if(modo === 'BAJA') {
+                document.getElementById('btnModoBaja').className = "bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-blue-900/20 transition flex items-center gap-2";
+                document.getElementById('btnModoSuba').className = "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2";
+                
+                document.getElementById('lblKpiPerdida').innerText = "Costo de Oportunidad";
+                document.getElementById('lblKpiPerdida').className = "text-xs text-red-400 font-semibold uppercase transition-colors";
+                document.getElementById('kpiPerdida').className = "text-2xl font-bold text-red-400 mt-1 transition-colors";
+                document.getElementById('boxKpiPerdida').className = "bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm bg-red-950/20 border-red-900/40 transition-colors";
+                
+                document.getElementById('lblKpiTeorico').innerText = "Comisión Teórica (Histórica)";
+                document.getElementById('lblChartMensual').innerText = "Pérdida por Mes (USD)";
+                document.getElementById('lblChartAsesores').innerText = "Métrica por Asesor (Top 20)";
+                document.getElementById('selectorObjetivoSuba').classList.add('hidden');
+                document.getElementById('selectorObjetivoSuba').classList.remove('flex');
+            } else {
+                document.getElementById('btnModoSuba').className = "bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-purple-900/20 transition flex items-center gap-2";
+                document.getElementById('btnModoBaja').className = "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2";
+                
+                document.getElementById('lblKpiPerdida').innerText = "Potencial de Suba (+)";
+                document.getElementById('lblKpiPerdida').className = "text-xs text-purple-400 font-semibold uppercase transition-colors";
+                document.getElementById('kpiPerdida').className = "text-2xl font-bold text-purple-400 mt-1 transition-colors";
+                document.getElementById('boxKpiPerdida').className = "bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm bg-purple-950/20 border-purple-900/40 transition-colors";
+                
+                document.getElementById('selectorObjetivoSuba').classList.remove('hidden');
+                document.getElementById('selectorObjetivoSuba').classList.add('flex');
+                actualizarEtiquetasObjetivoSuba();
+                document.getElementById('lblChartMensual').innerText = "Potencial por Mes (USD)";
+                document.getElementById('lblChartAsesores').innerText = "Potencial de Suba (Top 20)";
+            }
+
+            actualizarEstadoSelectorAsesor();
+
+            if (solapaActiva !== 'RESUMEN') {
+                if (modo === 'SUBA') {
+                    document.getElementById('panelFiltroCliente').classList.add('hidden');
+                } else {
+                    prepararFiltroClienteBaja();
+                }
+            }
+            
+            if (rawData.length > 0) procesarYRenderizar(true);
+        }
+
+        function limpiarTodo() {
+            rawData = []; datosProcesados = []; asesoresUnicosGlobal = []; 
+            solapaActiva = 'RESUMEN'; filtroFechaActivo = null; modoAnalisis = 'BAJA';
+            clienteSubaActivo = null; mesSubaActivo = null;
+            objetivoSubaActivo = 'IFA2'; fuenteDatosActiva = 'NINGUNA';
+            idGlobalContador = 0; paginaActual = 1;
+            
+            setModoAnalisis('BAJA'); 
+            
+            document.getElementById('inputBuscarAsesor').value = '';
+            document.getElementById('listaAsesores').innerHTML = '';
+            document.getElementById('btnLimpiar').classList.add('hidden');
+            
+            ['kpiVolumen', 'kpiFeeCobrado', 'kpiFeeTeorico', 'kpiPerdida'].forEach(id => {
+                document.getElementById(id).innerText = 'u$s 0,00';
+            });
+            document.getElementById('cantRegistros').innerText = '0 operaciones';
+            document.getElementById('lblVistaSeleccionada').innerText = 'Vista general';
+            document.getElementById('panelFiltroCliente').classList.add('hidden');
+            document.getElementById('panelFiltroFecha').classList.add('hidden');
+            document.getElementById('panelNavegacionSuba').classList.add('hidden');
+            document.getElementById('panelNavegacionSuba').classList.remove('flex');
+            document.getElementById('panelPaginacion').classList.add('hidden');
+            document.getElementById('inputClienteAsesor').value = '';
+            document.getElementById('tablaCuerpo').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">No hay datos disponibles. Recargá la página para volver a leer el archivo JS.</td></tr>';
+            document.getElementById('tablaPie').classList.add('hidden');
+            
+            if (chartMensualInstance) chartMensualInstance.destroy();
+            if (chartAsesoresInstance) chartAsesoresInstance.destroy();
+            if (chartArancelesInstance) chartArancelesInstance.destroy();
+            actualizarEtiquetasObjetivoSuba();
+            actualizarEstadoSelectorAsesor();
+            actualizarEstadoDatos('Recargá para restaurar', 'text-slate-400 border-slate-700 bg-slate-800');
+        }
+
+        function actualizarEstadoDatos(texto, clases) {
+            const estado = document.getElementById('estadoDatosJs');
+            document.getElementById('lblEstadoDatos').innerText = texto;
+            estado.className = `flex items-center gap-2.5 rounded-lg px-3 py-2 border ${clases}`;
+        }
+
+        // Parseador exacto de v27
+        function parsearNumero(val) {
+            if (val === undefined || val === null || val === "") return 0;
+            if (typeof val === 'number') return val;
+            let s = val.toString().trim().replace(/[^0-9,\.-]/g, ''); 
+            if (s.includes('.') && s.includes(',')) {
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else if (s.includes(',')) {
+                s = s.replace(',', '.');
+            }
+            return parseFloat(s) || 0;
+        }
+
+        // Parseador exacto de v27
+        function parsearFecha(val) {
+            if (!val) return { str: "-", obj: new Date(0) };
+            try {
+                if (val instanceof Date) {
+                    if (isNaN(val.getTime())) return { str: "-", obj: new Date(0) };
+                    const dia = String(val.getDate()).padStart(2, '0');
+                    const mes = String(val.getMonth() + 1).padStart(2, '0');
+                    return { str: `${dia}/${mes}/${val.getFullYear()}`, obj: val };
+                }
+                if (typeof val === 'number') {
+                    const dateObj = XLSX.SSF.parse_date_code(val);
+                    if (dateObj) {
+                        const dia = String(dateObj.d).padStart(2, '0');
+                        const mes = String(dateObj.m).padStart(2, '0');
+                        return { str: `${dia}/${mes}/${dateObj.y}`, obj: new Date(dateObj.y, dateObj.m - 1, dateObj.d) };
+                    }
+                }
+                let s = val.toString().trim();
+                let soloFecha = s.split(' ')[0]; 
+                if (soloFecha.includes('/')) {
+                    const p = soloFecha.split('/');
+                    if (p.length >= 3) {
+                        let y = parseInt(p[2]);
+                        if (y < 100) y += 2000;
+                        return { str: `${String(p[0]).padStart(2, '0')}/${String(p[1]).padStart(2, '0')}/${y}`, obj: new Date(y, parseInt(p[1])-1, parseInt(p[0])) };
+                    }
+                } else if (soloFecha.includes('-')) {
+                    const p = soloFecha.split('-');
+                    if (p.length >= 3) {
+                        if (p[0].length === 4) { return { str: `${p[2]}/${p[1]}/${p[0]}`, obj: new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])) }; } 
+                        else { let y = parseInt(p[2]); if (y < 100) y += 2000; return { str: `${p[0]}/${p[1]}/${y}`, obj: new Date(y, parseInt(p[1])-1, parseInt(p[0])) }; }
+                    }
+                }
+                return { str: s, obj: new Date(0) };
+            } catch (error) { return { str: val.toString(), obj: new Date(0) }; }
+        }
+
+        function interpretarArancel(arancelTexto, tasaCalculada) {
+            if (!arancelTexto) return tasaCalculada;
+            const t = arancelTexto.toString().toUpperCase();
+            if (t.includes('IFA 10')) return 0.015;
+            if (t.includes('IFA 12') || t.includes('IFA 4')) return 0.005;
+            if (t.includes('IFA 1')) return 0.01;
+            if (t.includes('IFA 2')) return 0.0075;
+            if (t.includes('IFA 3')) return 0.006;
+            if (t.includes('IFA 6')) return 0.004;
+            return tasaCalculada; 
+        }
+
+        function obtenerCodigoIFA(arancelTexto) {
+            const texto = (arancelTexto || '').toString().trim().toUpperCase();
+            const match = texto.match(/^IFA\s*(10|12|[1-9])(?:\b|$)/);
+            return match ? Number(match[1]) : null;
+        }
+
+        // LÓGICA V27 INTACTA PARA PROCESAR FILAS
+        function agregarFilaRaw(valorFecha, valorComitente, valorCliente, valorAsesor, valorDescripcion, valorCantidad, valorPrecio, valorCotizacion, valorComision, valorArancel) {
+            const fechaData = parsearFecha(valorFecha);
+            const comitente = valorComitente ? valorComitente.toString() : "-";
+            const cliente = valorCliente ? valorCliente.toString() : "Sin Nombre";
+            const asesor = valorAsesor ? valorAsesor.toString() : "Sin Asesor";
+            const descripcion = valorDescripcion ? valorDescripcion.toString() : "";
+            const arancelTexto = valorArancel ? valorArancel.toString() : "";
+
+            if (arancelTexto.toLowerCase().includes('diferenciado')) return;
+
+            const cantidad = Math.abs(parsearNumero(valorCantidad));
+            const precio = parsearNumero(valorPrecio);
+            let cotizacion = parsearNumero(valorCotizacion);
+            const comisionUSD = Math.abs(parsearNumero(valorComision));
+
+            if (cotizacion <= 0) cotizacion = 1;
+            const brutoOriginal = cantidad * precio;
+
+            if (brutoOriginal > 0 && comitente !== "-") {
+                idGlobalContador++;
+                rawData.push({
+                    idOriginal: idGlobalContador,
+                    fechaObj: fechaData.obj,
+                    fechaStr: fechaData.str,
+                    comitente: comitente,
+                    cliente: cliente,
+                    asesor: asesor,
+                    descripcion: descripcion,
+                    arancelTexto: arancelTexto,
+                    brutoOriginal: brutoOriginal,
+                    cotizacion: cotizacion,
+                    comisionUSD: comisionUSD
+                });
+            }
+        }
+
+        function procesarColeccionFilas(rows) {
+            rows.forEach(r => {
+                const keys = Object.keys(r);
+                if (keys.length === 0) return;
+                const primeraColumnaVal = r[keys[0]];
+                const valorFecha = r['FechaConcertacion'] !== undefined && r['FechaConcertacion'] !== "" ? r['FechaConcertacion'] : primeraColumnaVal;
+                agregarFilaRaw(
+                    valorFecha,
+                    r['Comitente'],
+                    r['Cuenta'],
+                    r['Asesor'],
+                    r['Descripcion'],
+                    r['Cantidad'],
+                    r['Precio'],
+                    r['CotizacionDolar'],
+                    r['ComisionDolarizada'],
+                    r['Arancel']
+                );
+            });
+        }
+
+        function procesarColeccionCompacta(paquete) {
+            if (!paquete || paquete.v !== 1 || !Array.isArray(paquete.x) || !paquete.d) {
+                throw new Error('Formato compacto de datos no reconocido.');
+            }
+            const d = paquete.d;
+            paquete.x.forEach(r => {
+                agregarFilaRaw(
+                    d.f[r[0]],
+                    d.o[r[1]],
+                    d.c[r[2]],
+                    d.a[r[3]],
+                    r[4],
+                    r[5],
+                    r[6],
+                    r[7],
+                    r[8],
+                    d.r[r[9]]
+                );
+            });
+        }
+
+        async function descomprimirPaqueteAutomatico(base64Gzip) {
+            if (typeof DecompressionStream === 'undefined') {
+                throw new Error('Este navegador no admite la descompresión gzip requerida.');
+            }
+            const binario = atob(base64Gzip);
+            const bytes = new Uint8Array(binario.length);
+            for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+            const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            const texto = await new Response(flujo).text();
+            return JSON.parse(texto);
+        }
+
+        async function resolverColeccionAutomatica() {
+            const datosExternos = window.COMISION_ACTUALIZADA;
+            if (Array.isArray(datosExternos)) return { tipo: 'filas', datos: datosExternos };
+            if (datosExternos && Array.isArray(datosExternos.rows)) return { tipo: 'filas', datos: datosExternos.rows };
+            if (window.COMISION_ACTUALIZADA_COMPACTA) return { tipo: 'compacta', datos: window.COMISION_ACTUALIZADA_COMPACTA };
+            if (typeof window.COMISION_ACTUALIZADA_COMPACTA_GZIP === 'string' && window.COMISION_ACTUALIZADA_COMPACTA_GZIP.length > 0) {
+                const paquete = await descomprimirPaqueteAutomatico(window.COMISION_ACTUALIZADA_COMPACTA_GZIP);
+                return { tipo: 'compacta', datos: paquete };
+            }
+            return null;
+        }
+
+        async function cargarDatosAutomaticos() {
+            fuenteDatosActiva = 'AUTOMATICA';
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('loader').classList.add('flex');
+            actualizarEstadoDatos('Descomprimiendo y procesando...', 'text-purple-300 border-purple-800/60 bg-purple-950/30');
+
+            try {
+                await new Promise(resolve => setTimeout(resolve, 25));
+                const coleccion = await resolverColeccionAutomatica();
+                const cantidadFilas = coleccion
+                    ? (coleccion.tipo === 'compacta' ? coleccion.datos.x.length : coleccion.datos.length)
+                    : 0;
+                if (cantidadFilas === 0) {
+                    document.getElementById('loader').classList.add('hidden');
+                    document.getElementById('loader').classList.remove('flex');
+                    actualizarEstadoDatos('Sin datos disponibles', 'text-slate-400 border-slate-700 bg-slate-800');
+                    return;
+                }
+
+                rawData = [];
+                datosProcesados = [];
+                idGlobalContador = 0;
+                if (coleccion.tipo === 'compacta') procesarColeccionCompacta(coleccion.datos);
+                else procesarColeccionFilas(coleccion.datos);
+
+                // Libera el texto comprimido y las filas temporales una vez que rawData
+                // ya quedó construido, para reducir el pico de memoria del navegador.
+                window.COMISION_ACTUALIZADA_COMPACTA_GZIP = null;
+                if (coleccion.tipo === 'compacta') coleccion.datos.x.length = 0;
+                ejecutarLogicaEstrategica();
+            } catch (error) {
+                console.error('Error al cargar comision_actualizada.js:', error);
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('loader').classList.remove('flex');
+                actualizarEstadoDatos('Error al leer los datos', 'text-red-300 border-red-800/60 bg-red-950/30');
+            }
+        }
+
+        function inicializarFuenteAutomatica() {
+            const datosYaDisponibles = Array.isArray(window.COMISION_ACTUALIZADA)
+                || (window.COMISION_ACTUALIZADA && Array.isArray(window.COMISION_ACTUALIZADA.rows))
+                || Boolean(window.COMISION_ACTUALIZADA_COMPACTA)
+                || (typeof window.COMISION_ACTUALIZADA_COMPACTA_GZIP === 'string' && window.COMISION_ACTUALIZADA_COMPACTA_GZIP.length > 0);
+            if (datosYaDisponibles) {
+                window.__ARANCELES_CARGA_PROMESA__ = cargarDatosAutomaticos();
+                return;
+            }
+
+            const scriptDatos = document.createElement('script');
+            scriptDatos.src = './comision_actualizada.js';
+            scriptDatos.onload = () => {
+                window.__ARANCELES_CARGA_PROMESA__ = cargarDatosAutomaticos();
+            };
+            scriptDatos.onerror = () => actualizarEstadoDatos('No se encontró el archivo JS', 'text-slate-400 border-slate-700 bg-slate-800');
+            document.head.appendChild(scriptDatos);
+        }
+
+        function obtenerFechaActualizacionReporte() {
+            const fechaMetadata = window.COMISION_ACTUALIZADA_META && window.COMISION_ACTUALIZADA_META.lastDate;
+            if (fechaMetadata) return fechaMetadata;
+
+            let ultimaFecha = null;
+            rawData.forEach(dato => {
+                if (!dato.fechaObj || dato.fechaObj.getTime() <= 0) return;
+                if (!ultimaFecha || dato.fechaObj.getTime() > ultimaFecha.fechaObj.getTime()) {
+                    ultimaFecha = dato;
+                }
+            });
+            return ultimaFecha ? ultimaFecha.fechaStr : null;
+        }
+
+        function ejecutarLogicaEstrategica() {
+            if (rawData.length === 0) {
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('loader').classList.remove('flex');
+                return;
+            }
+
+            rawData.sort((a, b) => (a.fechaObj.getTime() - b.fechaObj.getTime()) || (a.idOriginal - b.idOriginal));
+            let historialComitente = {}; 
+
+            datosProcesados = rawData.map(d => {
+                // RESTAURACIÓN MATEMÁTICA EXACTA V27
+                const descLower = d.descripcion.toLowerCase();
+                const esDolar = descLower.includes('usd') || descLower.includes('u$s') || descLower.includes('dolar') || descLower.includes('cable') || descLower.includes('mep') || descLower.includes('ext');
+                
+                let brutoUSD = d.brutoOriginal;
+                if (!esDolar) {
+                    brutoUSD = d.brutoOriginal / d.cotizacion;
+                }
+
+                let tasaCalculada = brutoUSD > 0 ? (d.comisionUSD / brutoUSD) : 0;
+                let tasaEfectivaRaw = interpretarArancel(d.arancelTexto, tasaCalculada);
+                const tasaEfectiva = Math.round(tasaEfectivaRaw * 10000) / 10000;
+
+                // Regresión v27: una tasa anómala (>= 5%) nunca puede convertirse
+                // en el techo histórico del comitente.
+                if (tasaEfectiva > 0 && tasaEfectiva < 0.05) {
+                    if (historialComitente[d.comitente] === undefined) {
+                        historialComitente[d.comitente] = tasaEfectiva; 
+                    } else if (tasaEfectiva > historialComitente[d.comitente] + 0.0001) {
+                        historialComitente[d.comitente] = tasaEfectiva;
+                    }
+                }
+
+                const tasaReferencia = historialComitente[d.comitente] !== undefined
+                    ? historialComitente[d.comitente]
+                    : tasaEfectiva;
+                const huboBaja = (tasaReferencia - tasaEfectiva) > 0.0005; 
+
+                let feeTeoricoUSD = 0;
+                let costoOportunidadUSD = 0;
+
+                if (huboBaja) {
+                    feeTeoricoUSD = brutoUSD * tasaReferencia;
+                    costoOportunidadUSD = Math.max(0, feeTeoricoUSD - d.comisionUSD);
+                } else {
+                    feeTeoricoUSD = d.comisionUSD;
+                }
+
+                // --- Lógica Potencial con objetivo configurable ---
+                // El universo de suba se define por la categoría explícita del
+                // boleto. No se infiere por cercanía de tasa: eso podía incluir
+                // acuerdos u otros aranceles que casualmente cobraran 0,50/0,60%.
+                const codigoIFA = obtenerCodigoIFA(d.arancelTexto);
+                const esIFA3o4 = codigoIFA === 3 || codigoIFA === 4 || codigoIFA === 12;
+
+                let tipoOperacion = "OPERACIÓN";
+                if (descLower.includes('compra') || descLower.includes('cpra')) tipoOperacion = "COMPRA";
+                if (descLower.includes('venta') || descLower.includes('vta')) tipoOperacion = "VENTA";
+
+                return { 
+                    ...d, tipoOperacion, brutoUSD, tasaEfectiva, 
+                    tasaReferencia, feeTeoricoUSD, costoOportunidadUSD, huboBaja,
+                    codigoIFA, esIFA3o4, esElegibleSuba: false,
+                    feeTeoricoSubaUSD: d.comisionUSD, costoOportunidadSubaUSD: 0
+                };
+            });
+
+            actualizarCalculosSuba();
+
+            asesoresUnicosGlobal = [...new Set(datosProcesados.map(d => d.asesor))].sort();
+            renderizarSelectorAsesores(asesoresUnicosGlobal);
+            
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('loader').classList.remove('flex');
+            document.getElementById('btnLimpiar').classList.remove('hidden');
+            if (fuenteDatosActiva === 'AUTOMATICA') {
+                const fechaActualizacion = obtenerFechaActualizacionReporte();
+                actualizarEstadoDatos(fechaActualizacion || 'Sin fecha válida', 'text-emerald-300 border-emerald-800/60 bg-emerald-950/30');
+            }
+
+            procesarYRenderizar(true); 
+        }
+
+        // Superficie mínima para pruebas de regresión. No interviene en la UI.
+        window.__ARANCELES_TEST__ = {
+            resetear() {
+                rawData = [];
+                datosProcesados = [];
+                asesoresUnicosGlobal = [];
+                idGlobalContador = 0;
+                paginaActual = 1;
+                listaGlobalA_Paginar = [];
+                solapaActiva = 'RESUMEN';
+                filtroFechaActivo = null;
+                clienteSubaActivo = null;
+                mesSubaActivo = null;
+                modoAnalisis = 'BAJA';
+                objetivoSubaActivo = 'IFA2';
+            },
+            procesarFilas(rows) {
+                this.resetear();
+                procesarColeccionFilas(rows);
+                ejecutarLogicaEstrategica();
+                return datosProcesados.map(d => ({ ...d }));
+            },
+            procesarCompacto(paquete) {
+                this.resetear();
+                procesarColeccionCompacta(paquete);
+                ejecutarLogicaEstrategica();
+                return datosProcesados.map(d => ({ ...d }));
+            },
+            obtenerDatos() {
+                return datosProcesados.map(d => ({ ...d }));
+            },
+            obtenerCodigoIFA,
+            cambiarObjetivoSuba,
+            obtenerObjetivoSuba
+        };
+
+        function cambiarPagina(delta) {
+            const maxPag = Math.ceil(listaGlobalA_Paginar.length / REGISTROS_POR_PAGINA);
+            paginaActual += delta;
+            if (paginaActual < 1) paginaActual = 1;
+            if (paginaActual > maxPag) paginaActual = maxPag;
+            renderizarTablaActual();
+        }
+
+        function limpiarFiltrosInternos() {
+            document.getElementById('inputClienteAsesor').value = '';
+            filtroFechaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function aplicarFiltroCliente() {
+            filtroFechaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function verDetalleFecha(fecha) {
+            document.getElementById('inputClienteAsesor').value = ''; 
+            filtroFechaActivo = fecha;
+            procesarYRenderizar(true);
+        }
+
+        function seleccionarAsesorDesdeBuscador() {
+            const input = document.getElementById('inputBuscarAsesor');
+            const busqueda = input.value.trim();
+            if (!busqueda) {
+                cambiarSolapa('RESUMEN');
+                return;
+            }
+
+            const exacto = asesoresUnicosGlobal.find(a => a.toLowerCase() === busqueda.toLowerCase());
+            const parciales = asesoresUnicosGlobal.filter(a => a.toLowerCase().includes(busqueda.toLowerCase()));
+            const asesorElegido = exacto || (parciales.length === 1 ? parciales[0] : null);
+
+            if (asesorElegido) {
+                input.value = asesorElegido;
+                cambiarSolapa(asesorElegido);
+            } else {
+                document.getElementById('lblVistaSeleccionada').innerText = parciales.length > 1
+                    ? 'Elegí un asesor de la lista'
+                    : 'No se encontró ese asesor';
+            }
+        }
+
+        function escaparHTML(valor) {
+            return String(valor)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function actualizarEstadoSelectorAsesor() {
+            const resumenActivo = solapaActiva === 'RESUMEN';
+            const colorActivo = modoAnalisis === 'SUBA'
+                ? 'bg-purple-600 border-purple-500'
+                : 'bg-blue-600 border-blue-500';
+            document.getElementById('btnResumenGeneral').className = `${resumenActivo ? `${colorActivo} text-white` : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'} border rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition`;
+            document.getElementById('lblVistaSeleccionada').innerText = resumenActivo ? 'Vista general' : `Viendo: ${solapaActiva}`;
+            if (resumenActivo) document.getElementById('inputBuscarAsesor').value = '';
+        }
+
+        function prepararFiltroClienteBaja() {
+            if (solapaActiva === 'RESUMEN') {
+                document.getElementById('panelFiltroCliente').classList.add('hidden');
+                return;
+            }
+
+            const baseAsesor = datosProcesados.filter(d => d.asesor === solapaActiva);
+            const clientesDelAsesor = [...new Set(baseAsesor.map(d => d.cliente))].sort();
+            const datalist = document.getElementById('listaClientesAsesor');
+            datalist.innerHTML = '';
+            clientesDelAsesor.forEach(c => {
+                datalist.innerHTML += `<option value="${c}"></option>`;
+            });
+            document.getElementById('inputClienteAsesor').value = '';
+            document.getElementById('lblAsesorActivo').innerText = solapaActiva;
+            document.getElementById('panelFiltroCliente').classList.remove('hidden');
+        }
+
+        function obtenerMesOperacion(dato) {
+            if (!dato.fechaStr || dato.fechaStr === '-') return 'Sin Fecha';
+            const partes = dato.fechaStr.split('/');
+            return partes.length >= 3 ? `${partes[1]}/${partes[2]}` : dato.fechaStr;
+        }
+
+        function verClienteSuba(comitenteCodificado) {
+            if (modoAnalisis !== 'SUBA') return;
+            clienteSubaActivo = decodeURIComponent(comitenteCodificado);
+            mesSubaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function verMesSuba(mesCodificado) {
+            if (modoAnalisis !== 'SUBA' || !clienteSubaActivo) return;
+            mesSubaActivo = decodeURIComponent(mesCodificado);
+            procesarYRenderizar(true);
+        }
+
+        function volverSuba() {
+            if (modoAnalisis !== 'SUBA') return;
+            if (mesSubaActivo) mesSubaActivo = null;
+            else clienteSubaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function actualizarNavegacionSuba() {
+            const panel = document.getElementById('panelNavegacionSuba');
+            if (modoAnalisis !== 'SUBA' || solapaActiva === 'RESUMEN' || !clienteSubaActivo) {
+                panel.classList.add('hidden');
+                panel.classList.remove('flex');
+                return;
+            }
+
+            const datoCliente = datosProcesados.find(d => d.comitente === clienteSubaActivo);
+            const nombreCliente = datoCliente ? datoCliente.cliente : clienteSubaActivo;
+            const contexto = mesSubaActivo
+                ? `${solapaActiva} · ${nombreCliente} (${clienteSubaActivo}) · ${mesSubaActivo}`
+                : `${solapaActiva} · ${nombreCliente} (${clienteSubaActivo}) · Evolución mensual`;
+
+            document.getElementById('lblNavegacionSuba').innerText = contexto;
+            document.getElementById('lblVolverSuba').innerText = mesSubaActivo ? 'Volver a meses' : 'Volver a clientes';
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+        }
+
+        function cambiarSolapa(solapa) {
+            solapaActiva = solapa;
+            filtroFechaActivo = null;
+            clienteSubaActivo = null;
+            mesSubaActivo = null;
+            document.getElementById('panelNavegacionSuba').classList.add('hidden');
+            document.getElementById('panelNavegacionSuba').classList.remove('flex');
+            
+            if (solapaActiva !== 'RESUMEN') {
+                if (modoAnalisis === 'SUBA') {
+                    document.getElementById('panelFiltroCliente').classList.add('hidden');
+                    document.getElementById('inputClienteAsesor').value = '';
+                } else {
+                    prepararFiltroClienteBaja();
+                }
+            } else {
+                document.getElementById('panelFiltroCliente').classList.add('hidden');
+                document.getElementById('inputClienteAsesor').value = '';
+            }
+            if (solapaActiva !== 'RESUMEN') document.getElementById('inputBuscarAsesor').value = solapaActiva;
+            actualizarEstadoSelectorAsesor();
+            
+            procesarYRenderizar(true);
+        }
+
+        function renderizarSelectorAsesores(asesores) {
+            document.getElementById('listaAsesores').innerHTML = asesores
+                .map(a => `<option value="${escaparHTML(a)}"></option>`)
+                .join('');
+            actualizarEstadoSelectorAsesor();
+            lucide.createIcons();
+        }
+
+        function procesarYRenderizar(reiniciarPagina = false) {
+            if (datosProcesados.length === 0) return;
+            if (reiniciarPagina) paginaActual = 1;
+
+            let totalVolumen = 0, totalFeeCobrado = 0, totalFeeTeorico = 0, totalPerdida = 0;
+            const perdidaPorMes = {}, perdidaPorAsesor = {};
+            const conteoAranceles = {}; 
+            const clientesVistosParaArancel = new Set(); 
+
+            let datosVista = [];
+            const inputText = document.getElementById('inputClienteAsesor').value.trim();
+            const esVistaResumen = (solapaActiva === 'RESUMEN');
+            const filtroCliente = (!esVistaResumen && inputText !== '') ? inputText : 'TODOS';
+            const esFlujoSuba = modoAnalisis === 'SUBA' && !esVistaResumen;
+            const esVistaSubaClientes = esFlujoSuba && !clienteSubaActivo;
+            const esVistaSubaMeses = esFlujoSuba && !!clienteSubaActivo && !mesSubaActivo;
+            const esVistaSubaDias = esFlujoSuba && !!clienteSubaActivo && !!mesSubaActivo;
+            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null);
+            const esVistaDetalle = (modoAnalisis === 'BAJA' && !esVistaResumen && (filtroCliente !== 'TODOS' || filtroFechaActivo !== null));
+
+            let baseDatos = datosProcesados;
+            if (modoAnalisis === 'SUBA') {
+                baseDatos = datosProcesados.filter(d => d.esElegibleSuba);
+            }
+
+            if (esVistaResumen) {
+                datosVista = baseDatos;
+                document.getElementById('panelFiltroFecha').classList.add('hidden');
+            } else {
+                datosVista = baseDatos.filter(d => d.asesor === solapaActiva);
+                if (esFlujoSuba) {
+                    if (clienteSubaActivo) datosVista = datosVista.filter(d => d.comitente === clienteSubaActivo);
+                    if (mesSubaActivo) datosVista = datosVista.filter(d => obtenerMesOperacion(d) === mesSubaActivo);
+                    document.getElementById('panelFiltroFecha').classList.add('hidden');
+                } else if (filtroFechaActivo) {
+                    datosVista = datosVista.filter(d => d.fechaStr === filtroFechaActivo);
+                    document.getElementById('panelFiltroFecha').classList.remove('hidden');
+                    document.getElementById('lblFechaFiltro').innerText = filtroFechaActivo;
+                } else if (filtroCliente !== 'TODOS') {
+                    datosVista = datosVista.filter(d => d.cliente.toLowerCase().includes(filtroCliente.toLowerCase()) || d.comitente.includes(filtroCliente));
+                    document.getElementById('panelFiltroFecha').classList.add('hidden');
+                } else { document.getElementById('panelFiltroFecha').classList.add('hidden'); }
+            }
+
+            actualizarNavegacionSuba();
+
+            if (esVistaDetalle) datosVista.sort((a, b) => (a.fechaObj.getTime() - b.fechaObj.getTime()) || (a.idOriginal - b.idOriginal));
+
+            const filasAgrupadas = {}; 
+
+            datosVista.forEach(d => {
+                const valPerdida = modoAnalisis === 'BAJA' ? d.costoOportunidadUSD : d.costoOportunidadSubaUSD;
+                const valTeorico = modoAnalisis === 'BAJA' ? d.feeTeoricoUSD : d.feeTeoricoSubaUSD;
+
+                totalVolumen += d.brutoUSD;
+                totalFeeCobrado += d.comisionUSD;
+                totalFeeTeorico += valTeorico;
+                totalPerdida += valPerdida;
+
+                const mes = obtenerMesOperacion(d);
+                
+                if (valPerdida > 0) {
+                    perdidaPorMes[mes] = (perdidaPorMes[mes] || 0) + valPerdida;
+                    perdidaPorAsesor[d.asesor] = (perdidaPorAsesor[d.asesor] || 0) + valPerdida;
+                }
+
+                // Gráfico Torta de Aranceles: Exclusivamente IFA
+                if (!clientesVistosParaArancel.has(d.comitente)) {
+                    clientesVistosParaArancel.add(d.comitente);
+                    let arancelLimpio = d.arancelTexto.trim().toUpperCase();
+                    if (arancelLimpio.startsWith('IFA')) {
+                        let matchArancel = arancelLimpio.match(/IFA\s*\d+/);
+                        let arancelGraphLabel = matchArancel ? matchArancel[0] : arancelLimpio;
+                        conteoAranceles[arancelGraphLabel] = (conteoAranceles[arancelGraphLabel] || 0) + 1;
+                    }
+                }
+
+                if (esVistaResumen) {
+                    if (!filasAgrupadas[d.asesor]) filasAgrupadas[d.asesor] = { clave: d.asesor, boletos: 0, bruto: 0, cobrado: 0, teorico: 0, perdida: 0 };
+                    filasAgrupadas[d.asesor].boletos++; 
+                    filasAgrupadas[d.asesor].bruto += d.brutoUSD;
+                    filasAgrupadas[d.asesor].cobrado += d.comisionUSD; 
+                    filasAgrupadas[d.asesor].perdida += valPerdida;
+                } else if (esVistaSubaClientes) {
+                    if (!filasAgrupadas[d.comitente]) filasAgrupadas[d.comitente] = { clave: d.comitente, cliente: d.cliente, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
+                    filasAgrupadas[d.comitente].boletos++;
+                    filasAgrupadas[d.comitente].bruto += d.brutoUSD;
+                    filasAgrupadas[d.comitente].cobrado += d.comisionUSD;
+                    filasAgrupadas[d.comitente].perdida += valPerdida;
+                } else if (esVistaSubaMeses) {
+                    if (!filasAgrupadas[mes]) filasAgrupadas[mes] = { clave: mes, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
+                    filasAgrupadas[mes].boletos++;
+                    filasAgrupadas[mes].bruto += d.brutoUSD;
+                    filasAgrupadas[mes].cobrado += d.comisionUSD;
+                    filasAgrupadas[mes].perdida += valPerdida;
+                } else if (esVistaSubaDias) {
+                    if (!filasAgrupadas[d.fechaStr]) filasAgrupadas[d.fechaStr] = { clave: d.fechaStr, objD: d.fechaObj, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
+                    filasAgrupadas[d.fechaStr].boletos++;
+                    filasAgrupadas[d.fechaStr].bruto += d.brutoUSD;
+                    filasAgrupadas[d.fechaStr].cobrado += d.comisionUSD;
+                    filasAgrupadas[d.fechaStr].perdida += valPerdida;
+                } else if (esVistaDiario) {
+                    if (!filasAgrupadas[d.fechaStr]) filasAgrupadas[d.fechaStr] = { clave: d.fechaStr, objD: d.fechaObj, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
+                    filasAgrupadas[d.fechaStr].boletos++; 
+                    filasAgrupadas[d.fechaStr].bruto += d.brutoUSD;
+                    filasAgrupadas[d.fechaStr].cobrado += d.comisionUSD; 
+                    filasAgrupadas[d.fechaStr].perdida += valPerdida;
+                }
+            });
+
+            if (esVistaResumen) {
+                listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => {
+                    if (b.perdida !== a.perdida) return b.perdida - a.perdida; 
+                    return b.bruto - a.bruto; 
+                });
+            } else if (esVistaSubaClientes) {
+                listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => {
+                    if (b.perdida !== a.perdida) return b.perdida - a.perdida;
+                    return a.cliente.localeCompare(b.cliente);
+                });
+            } else if (esVistaSubaMeses) {
+                listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => {
+                    const [mesA, anioA] = a.clave.split('/').map(Number);
+                    const [mesB, anioB] = b.clave.split('/').map(Number);
+                    return (anioA * 12 + mesA) - (anioB * 12 + mesB);
+                });
+            } else if (esVistaSubaDias) {
+                listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => a.objD.getTime() - b.objD.getTime());
+            } else if (esVistaDiario) {
+                listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => a.objD.getTime() - b.objD.getTime()); 
+            } else {
+                listaGlobalA_Paginar = [...datosVista]; 
+            }
+
+            const headerColText = modoAnalisis === 'BAJA' ? 'Costo Oportunidad (USD)' : 'Potencial Suba (USD)';
+            const kpiColorClass = modoAnalisis === 'BAJA' ? 'text-red-400' : 'text-purple-400';
+            const kpiBgClass = modoAnalisis === 'BAJA' ? 'bg-red-950/30' : 'bg-purple-950/30';
+
+            document.getElementById('kpiVolumen').innerText = `u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpiFeeCobrado').innerText = `u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpiFeeTeorico').innerText = `u$s ${totalFeeTeorico.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpiPerdida').innerText = `u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('cantRegistros').innerText = `${datosVista.length} operaciones evaluadas`;
+
+            const thead = document.getElementById('tablaCabecera'), tfoot = document.getElementById('tablaPie');
+
+            if (esVistaResumen) {
+                thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4">Asesor</th><th class="py-3 px-4 text-center">Op. Realizadas</th><th class="py-3 px-4 text-right">Volumen Bruto (USD)</th><th class="py-3 px-4 text-right">Fee Cobrado (USD)</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
+                tfoot.innerHTML = `<tr><td colspan="2" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Total Acumulado:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+            } else if (esVistaSubaClientes || esVistaSubaMeses || esVistaSubaDias) {
+                const primeraColumna = esVistaSubaClientes ? 'Cliente / Comitente' : (esVistaSubaMeses ? 'Mes' : 'Día');
+                thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4">${primeraColumna}</th><th class="py-3 px-4 text-center">Operaciones</th><th class="py-3 px-4 text-right">Volumen Bruto (USD)</th><th class="py-3 px-4 text-right">Fee Cobrado (USD)</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
+                tfoot.innerHTML = `<tr><td colspan="2" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Total Acumulado:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+            } else if (esVistaDiario) {
+                thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4">Fecha (Diario)</th><th class="py-3 px-4 text-center">Operaciones</th><th class="py-3 px-4 text-right">Volumen Bruto (USD)</th><th class="py-3 px-4 text-right">Fee Cobrado (USD)</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
+                tfoot.innerHTML = `<tr><td colspan="2" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Total Acumulado:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+            } else {
+                const targetHeader = modoAnalisis === 'BAJA' ? 'Ref. Histórica' : 'Tasa Objetivo';
+                thead.innerHTML = `<tr><th class="py-3 px-4">Fecha</th><th class="py-3 px-4 w-1/4">Comitente / Cliente</th><th class="py-3 px-4">Operación</th><th class="py-3 px-4 text-right">Bruto (USD)</th><th class="py-3 px-4 text-center">Tasa Efectiva</th><th class="py-3 px-4 text-center">${targetHeader}</th><th class="py-3 px-4 text-right">Fee Cobrado</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
+                tfoot.innerHTML = `<tr><td colspan="3" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Totales de la vista:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4"></td><td class="py-4 px-4"></td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+            }
+
+            tfoot.classList.remove('hidden');
+            
+            renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles);
+            renderizarTablaActual();
+        }
+
+        function renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles) {
+            try {
+                const colorHex = modoAnalisis === 'BAJA' ? '#f87171' : '#c084fc';
+                const labelText = modoAnalisis === 'BAJA' ? 'Costo Oportunidad (USD)' : 'Potencial de Suba (USD)';
+
+                // 1. Mensual
+                const ctx1 = document.getElementById('chartMensual');
+                if (ctx1) {
+                    if (chartMensualInstance) chartMensualInstance.destroy();
+                    const mesesOrdenados = Object.keys(perdidaPorMes).sort((a, b) => {
+                        const partsA = a.split('/'); const partsB = b.split('/');
+                        if (partsA.length === 2 && partsB.length === 2) {
+                            return new Date(partsA[1], partsA[0] - 1) - new Date(partsB[1], partsB[0] - 1);
+                        }
+                        return a.localeCompare(b);
+                    });
+                    
+                    chartMensualInstance = new Chart(ctx1.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: mesesOrdenados,
+                            datasets: [{ label: labelText, data: mesesOrdenados.map(k => perdidaPorMes[k]), backgroundColor: colorHex, borderRadius: 4 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+                    });
+                }
+
+                // 2. Asesores (Top 20 + Otros)
+                const ctx2 = document.getElementById('chartAsesores');
+                if (ctx2) {
+                    if (chartAsesoresInstance) chartAsesoresInstance.destroy();
+                    
+                    const asesoresOrdenados = Object.keys(perdidaPorAsesor).sort((a,b) => perdidaPorAsesor[b] - perdidaPorAsesor[a]);
+                    const top20Labels = asesoresOrdenados.slice(0, 20);
+                    const top20Data = top20Labels.map(l => perdidaPorAsesor[l]);
+                    const otrosAsesores = asesoresOrdenados.slice(20);
+                    
+                    if(otrosAsesores.length > 0) {
+                        const sumaOtros = otrosAsesores.reduce((sum, a) => sum + perdidaPorAsesor[a], 0);
+                        if (sumaOtros > 0) {
+                            top20Labels.push('OTROS');
+                            top20Data.push(sumaOtros);
+                        }
+                    }
+
+                    chartAsesoresInstance = new Chart(ctx2.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: top20Labels,
+                            datasets: [{ data: top20Data, backgroundColor: ['#60a5fa', '#c084fc', '#f472b6', '#fbbf24', '#34d399', '#38bdf8', '#818cf8', '#a78bfa', '#f87171', '#fb923c'] }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                    });
+                }
+
+                // 3. Aranceles (Torta de IFA)
+                const ctx3 = document.getElementById('chartAranceles');
+                if (ctx3) {
+                    if (chartArancelesInstance) chartArancelesInstance.destroy();
+                    const labelsAranceles = Object.keys(conteoAranceles).sort();
+                    chartArancelesInstance = new Chart(ctx3.getContext('2d'), {
+                        type: 'pie',
+                        data: {
+                            labels: labelsAranceles,
+                            datasets: [{ 
+                                data: labelsAranceles.map(k => conteoAranceles[k]), 
+                                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#f97316', '#64748b'] 
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            plugins: { 
+                                legend: { position: 'right', labels: {color: '#94a3b8'} } 
+                            } 
+                        }
+                    });
+                }
+
+            } catch (error) { console.warn("Gráficos no renderizados.", error); }
+        }
+
+        function renderizarTablaActual() {
+            const tbody = document.getElementById('tablaCuerpo');
+            const totalItems = listaGlobalA_Paginar.length;
+            
+            if (totalItems === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">No hay datos para esta selección.</td></tr>';
+                document.getElementById('panelPaginacion').classList.add('hidden');
+                return;
+            }
+
+            const totalPaginas = Math.ceil(totalItems / REGISTROS_POR_PAGINA);
+            const inicio = (paginaActual - 1) * REGISTROS_POR_PAGINA;
+            const fin = Math.min(inicio + REGISTROS_POR_PAGINA, totalItems);
+            const datosPagina = listaGlobalA_Paginar.slice(inicio, fin);
+
+            const esVistaResumen = (solapaActiva === 'RESUMEN');
+            const inputText = document.getElementById('inputClienteAsesor').value.trim();
+            const filtroCliente = (!esVistaResumen && inputText !== '') ? inputText : 'TODOS';
+            const esFlujoSuba = modoAnalisis === 'SUBA' && !esVistaResumen;
+            const esVistaSubaClientes = esFlujoSuba && !clienteSubaActivo;
+            const esVistaSubaMeses = esFlujoSuba && !!clienteSubaActivo && !mesSubaActivo;
+            const esVistaSubaDias = esFlujoSuba && !!clienteSubaActivo && !!mesSubaActivo;
+            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null);
+
+            const rowColorClass = modoAnalisis === 'BAJA' ? 'text-red-400 bg-red-950/20' : 'text-purple-400 bg-purple-950/20';
+
+            if (esVistaResumen) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                            <button onclick="cambiarSolapa('${f.clave}')" class="text-blue-400 hover:underline flex items-center gap-1">${f.clave} <i data-lucide="external-link" class="w-3 h-3"></i></button>
+                        </td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else if (esVistaSubaClientes) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4">
+                            <button onclick="verClienteSuba('${encodeURIComponent(f.clave)}')" class="text-left group">
+                                <div class="text-purple-300 group-hover:text-purple-200 group-hover:underline font-semibold flex items-center gap-1">${f.cliente} <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></div>
+                                <div class="text-xs text-slate-400 mt-0.5">Comitente ${f.clave}</div>
+                            </button>
+                        </td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else if (esVistaSubaMeses) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 font-medium text-white"><button onclick="verMesSuba('${encodeURIComponent(f.clave)}')" class="text-purple-300 hover:text-purple-200 hover:underline flex items-center gap-1">${f.clave} <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button></td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else if (esVistaSubaDias) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 font-medium text-white">${f.clave}</td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else if (esVistaDiario) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 font-medium text-white"><button onclick="verDetalleFecha('${f.clave}')" class="text-blue-400 hover:underline flex items-center gap-1">${f.clave} <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button></td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = datosPagina.map(d => {
+                    const perdidaMonto = modoAnalisis === 'BAJA' ? d.costoOportunidadUSD : d.costoOportunidadSubaUSD;
+                    const valRefColumna = modoAnalisis === 'BAJA' ? d.tasaReferencia : obtenerObjetivoSuba().tasa;
+                    const flagTarget = modoAnalisis === 'BAJA' ? d.huboBaja : true;
+
+                    return `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 text-xs font-medium text-slate-300">${d.fechaStr}</td>
+                        <td class="py-3 px-4">
+                            <div class="text-white font-medium">${d.comitente}</div>
+                            <div class="text-xs text-slate-400 truncate w-48" title="${d.cliente}">${d.cliente}</div>
+                        </td>
+                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs font-semibold ${d.tipoOperacion === 'COMPRA' ? 'bg-blue-500/10 text-blue-400' : (d.tipoOperacion === 'VENTA' ? 'bg-purple-500/10 text-purple-400' : 'bg-slate-500/10 text-slate-400')}">${d.tipoOperacion}</span><div class="text-xs text-slate-400 mt-1 truncate w-32" title="${d.descripcion}">${d.descripcion}</div></td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${d.brutoUSD.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-center font-mono ${flagTarget && perdidaMonto > 0 ? (modoAnalisis==='BAJA'?'text-red-400':'text-purple-400') + ' font-bold' : 'text-slate-300'}">${(d.tasaEfectiva*100).toLocaleString('es-AR', {maximumFractionDigits: 3})}%</td>
+                        <td class="py-3 px-4 text-center font-mono text-blue-400">${(valRefColumna*100).toLocaleString('es-AR', {maximumFractionDigits: 3})}%</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${d.comisionUSD.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${perdidaMonto > 0 ? rowColorClass : 'text-slate-500'}">u$s ${perdidaMonto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                    `
+                }).join('');
+            }
+
+            lucide.createIcons();
+
+            if (totalItems > REGISTROS_POR_PAGINA) {
+                document.getElementById('panelPaginacion').classList.remove('hidden');
+                document.getElementById('panelPaginacion').classList.add('flex');
+                document.getElementById('pagInicio').innerText = inicio + 1;
+                document.getElementById('pagFin').innerText = fin;
+                document.getElementById('pagTotal').innerText = totalItems;
+                
+                document.getElementById('btnPagAnt').disabled = (paginaActual === 1);
+                document.getElementById('btnPagSig').disabled = (paginaActual === totalPaginas);
+            } else {
+                document.getElementById('panelPaginacion').classList.add('hidden');
+                document.getElementById('panelPaginacion').classList.remove('flex');
+            }
+        }
+
+        actualizarEtiquetasObjetivoSuba();
+        actualizarEstadoSelectorAsesor();
+        inicializarFuenteAutomatica();
+    </script>
+</body>
+</html>
