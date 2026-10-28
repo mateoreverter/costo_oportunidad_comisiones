@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v42: datos automáticos compactos, indicador de última fecha y lógica v27 intacta -->
+<!-- v43: drill-down de clientes desde la distribución de aranceles -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -102,7 +102,10 @@
                 </div>
             </div>
             <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
-                <h4 class="text-sm font-semibold text-slate-300 mb-4">Distribución de Aranceles (IFA)</h4>
+                <div class="mb-4">
+                    <h4 class="text-sm font-semibold text-slate-300">Distribución de Aranceles (IFA)</h4>
+                    <p class="text-[11px] text-slate-500 mt-1">Hacé clic en una porción o en su referencia para ver los clientes.</p>
+                </div>
                 <div class="h-64 relative">
                     <canvas id="chartAranceles"></canvas>
                 </div>
@@ -198,6 +201,49 @@
         </div>
     </div>
 
+    <!-- Listado de clientes de la porción seleccionada en la torta de aranceles -->
+    <div id="modalClientesArancel" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" onclick="if (event.target === this) cerrarModalClientesArancel()">
+        <section role="dialog" aria-modal="true" aria-labelledby="tituloModalArancel" class="w-full max-w-4xl max-h-[88vh] bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <header class="px-5 py-4 border-b border-slate-700 flex items-start justify-between gap-4 bg-slate-900/70">
+                <div>
+                    <h3 id="tituloModalArancel" class="text-lg font-bold text-white">Clientes por arancel</h3>
+                    <p id="subtituloModalArancel" class="text-xs text-slate-400 mt-1"></p>
+                </div>
+                <button type="button" onclick="cerrarModalClientesArancel()" aria-label="Cerrar listado" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </header>
+
+            <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/90">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500 pointer-events-none"></i>
+                    <input id="buscarClienteArancel" type="search" oninput="filtrarClientesArancel()" placeholder="Buscar por cliente, comitente o asesor..." autocomplete="off" class="w-full bg-slate-900 border border-slate-600 text-white rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="overflow-auto flex-1 min-h-0">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="sticky top-0 z-10 bg-slate-900 text-xs uppercase text-slate-400 border-b border-slate-700">
+                        <tr>
+                            <th class="py-3 px-5">Cliente</th>
+                            <th class="py-3 px-5">Comitente</th>
+                            <th class="py-3 px-5">Asesor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cuerpoClientesArancel" class="divide-y divide-slate-700/60"></tbody>
+                </table>
+            </div>
+
+            <footer class="px-5 py-3 border-t border-slate-700 bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+                <span id="estadoPaginacionArancel">0 clientes</span>
+                <div class="flex gap-2">
+                    <button id="btnAnteriorArancel" type="button" onclick="cambiarPaginaClientesArancel(-1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-white disabled:opacity-40 disabled:cursor-not-allowed transition">Anterior</button>
+                    <button id="btnSiguienteArancel" type="button" onclick="cambiarPaginaClientesArancel(1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-white disabled:opacity-40 disabled:cursor-not-allowed transition">Siguiente</button>
+                </div>
+            </footer>
+        </section>
+    </div>
+
     <script>
         lucide.createIcons();
         let rawData = []; 
@@ -220,6 +266,11 @@
         let chartMensualInstance = null;
         let chartAsesoresInstance = null;
         let chartArancelesInstance = null;
+        let clientesPorArancelActual = {};
+        let clientesArancelOriginales = [];
+        let clientesArancelFiltrados = [];
+        let paginaClientesArancel = 1;
+        const CLIENTES_POR_PAGINA_ARANCEL = 100;
         
         let idGlobalContador = 0; 
         let paginaActual = 1;
@@ -782,6 +833,87 @@
                 .replaceAll("'", '&#039;');
         }
 
+        function abrirModalClientesArancel(arancel) {
+            const clientes = clientesPorArancelActual[arancel] || [];
+            clientesArancelOriginales = [...clientes].sort((a, b) => {
+                const porNombre = a.cliente.localeCompare(b.cliente, 'es', { sensitivity: 'base' });
+                return porNombre !== 0 ? porNombre : a.comitente.localeCompare(b.comitente, 'es', { numeric: true });
+            });
+            clientesArancelFiltrados = clientesArancelOriginales;
+            paginaClientesArancel = 1;
+
+            document.getElementById('tituloModalArancel').innerText = `Clientes con ${arancel}`;
+            const contexto = solapaActiva === 'RESUMEN' ? 'Resumen general' : `Asesor: ${solapaActiva}`;
+            document.getElementById('subtituloModalArancel').innerText = `${clientes.length.toLocaleString('es-AR')} clientes únicos · ${contexto}`;
+            document.getElementById('buscarClienteArancel').value = '';
+
+            const modal = document.getElementById('modalClientesArancel');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+            renderizarClientesArancel();
+            lucide.createIcons();
+            setTimeout(() => document.getElementById('buscarClienteArancel').focus(), 0);
+        }
+
+        function cerrarModalClientesArancel() {
+            const modal = document.getElementById('modalClientesArancel');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function filtrarClientesArancel() {
+            const termino = document.getElementById('buscarClienteArancel').value.trim().toLocaleLowerCase('es');
+            clientesArancelFiltrados = termino
+                ? clientesArancelOriginales.filter(item =>
+                    item.cliente.toLocaleLowerCase('es').includes(termino)
+                    || item.comitente.toLocaleLowerCase('es').includes(termino)
+                    || item.asesor.toLocaleLowerCase('es').includes(termino)
+                )
+                : clientesArancelOriginales;
+            paginaClientesArancel = 1;
+            renderizarClientesArancel();
+        }
+
+        function cambiarPaginaClientesArancel(delta) {
+            const totalPaginas = Math.max(1, Math.ceil(clientesArancelFiltrados.length / CLIENTES_POR_PAGINA_ARANCEL));
+            paginaClientesArancel = Math.min(totalPaginas, Math.max(1, paginaClientesArancel + delta));
+            renderizarClientesArancel();
+        }
+
+        function renderizarClientesArancel() {
+            const total = clientesArancelFiltrados.length;
+            const totalPaginas = Math.max(1, Math.ceil(total / CLIENTES_POR_PAGINA_ARANCEL));
+            paginaClientesArancel = Math.min(paginaClientesArancel, totalPaginas);
+            const inicio = (paginaClientesArancel - 1) * CLIENTES_POR_PAGINA_ARANCEL;
+            const fin = Math.min(inicio + CLIENTES_POR_PAGINA_ARANCEL, total);
+            const pagina = clientesArancelFiltrados.slice(inicio, fin);
+            const cuerpo = document.getElementById('cuerpoClientesArancel');
+
+            cuerpo.innerHTML = pagina.length
+                ? pagina.map(item => `
+                    <tr class="hover:bg-slate-700/30">
+                        <td class="py-3 px-5 font-medium text-white">${escaparHTML(item.cliente)}</td>
+                        <td class="py-3 px-5 font-mono text-slate-300">${escaparHTML(item.comitente)}</td>
+                        <td class="py-3 px-5 text-slate-400">${escaparHTML(item.asesor)}</td>
+                    </tr>
+                `).join('')
+                : '<tr><td colspan="3" class="py-10 px-5 text-center text-slate-500">No se encontraron clientes.</td></tr>';
+
+            document.getElementById('estadoPaginacionArancel').innerText = total
+                ? `Mostrando ${inicio + 1}-${fin} de ${total.toLocaleString('es-AR')} clientes`
+                : '0 clientes';
+            document.getElementById('btnAnteriorArancel').disabled = paginaClientesArancel <= 1;
+            document.getElementById('btnSiguienteArancel').disabled = paginaClientesArancel >= totalPaginas;
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !document.getElementById('modalClientesArancel').classList.contains('hidden')) {
+                cerrarModalClientesArancel();
+            }
+        });
+
         function actualizarEstadoSelectorAsesor() {
             const resumenActivo = solapaActiva === 'RESUMEN';
             const colorActivo = modoAnalisis === 'SUBA'
@@ -895,7 +1027,8 @@
 
             let totalVolumen = 0, totalFeeCobrado = 0, totalFeeTeorico = 0, totalPerdida = 0;
             const perdidaPorMes = {}, perdidaPorAsesor = {};
-            const conteoAranceles = {}; 
+            const conteoAranceles = {};
+            const clientesPorArancel = {};
             const clientesVistosParaArancel = new Set(); 
 
             let datosVista = [];
@@ -963,6 +1096,12 @@
                         let matchArancel = arancelLimpio.match(/IFA\s*\d+/);
                         let arancelGraphLabel = matchArancel ? matchArancel[0] : arancelLimpio;
                         conteoAranceles[arancelGraphLabel] = (conteoAranceles[arancelGraphLabel] || 0) + 1;
+                        if (!clientesPorArancel[arancelGraphLabel]) clientesPorArancel[arancelGraphLabel] = [];
+                        clientesPorArancel[arancelGraphLabel].push({
+                            cliente: d.cliente,
+                            comitente: d.comitente,
+                            asesor: d.asesor
+                        });
                     }
                 }
 
@@ -1053,11 +1192,11 @@
 
             tfoot.classList.remove('hidden');
             
-            renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles);
+            renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles, clientesPorArancel);
             renderizarTablaActual();
         }
 
-        function renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles) {
+        function renderizarGraficos(perdidaPorMes, perdidaPorAsesor, conteoAranceles, clientesPorArancel) {
             try {
                 const colorHex = modoAnalisis === 'BAJA' ? '#f87171' : '#c084fc';
                 const labelText = modoAnalisis === 'BAJA' ? 'Costo Oportunidad (USD)' : 'Potencial de Suba (USD)';
@@ -1115,6 +1254,7 @@
                 // 3. Aranceles (Torta de IFA)
                 const ctx3 = document.getElementById('chartAranceles');
                 if (ctx3) {
+                    clientesPorArancelActual = clientesPorArancel;
                     if (chartArancelesInstance) chartArancelesInstance.destroy();
                     const labelsAranceles = Object.keys(conteoAranceles).sort();
                     chartArancelesInstance = new Chart(ctx3.getContext('2d'), {
@@ -1129,8 +1269,21 @@
                         options: { 
                             responsive: true, 
                             maintainAspectRatio: false, 
+                            onHover: (event, elementos) => {
+                                if (event.native && event.native.target) {
+                                    event.native.target.style.cursor = elementos.length ? 'pointer' : 'default';
+                                }
+                            },
+                            onClick: (event, elementos) => {
+                                if (!elementos.length) return;
+                                abrirModalClientesArancel(labelsAranceles[elementos[0].index]);
+                            },
                             plugins: { 
-                                legend: { position: 'right', labels: {color: '#94a3b8'} } 
+                                legend: {
+                                    position: 'right',
+                                    labels: {color: '#94a3b8'},
+                                    onClick: (event, item) => abrirModalClientesArancel(item.text)
+                                }
                             } 
                         }
                     });
