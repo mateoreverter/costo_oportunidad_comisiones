@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- v44: índices por asesor, renderizado por lotes y buscadores livianos -->
+<!-- v45: acceso rápido para quitar asesor y favicon vectorial -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Aranceles Balanz</title>
-    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFYAAAA5CAYAAACs9Nx4AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASeSURBVHhe5Zo9bxs3GIAfkneyLMuxZdcobAfwXiAdUiSAU7RDh075LQU6dArQoUDGokB/S6YO7VA0KRI0Q/MLDMT20PgjdixbHyQ7VEqlS2zzeORJpzybKep0fO69l++9Z7H08SeWCSCAhpQ0pEQish8HxQBtY2gbg6Wc5crsQBk0pGQtSWlKFV0qg0U2pWQtSViQ5Sy5nF8ZMCckqyplUaoSdL6LAJpSsapS5kTcpcc9+ghNqVhWimQSRjMkApaVYlGp7EfBiC5WCUFLlXcL5qEhJCsqiXKxo642RbCiFDUR4cwDkQpBS6XBzzGa2DkhaSVJKZtTUSTQUknQvBvuSCPUhGBZTWaDKsKyUsHkhjnKCIkQLKskO1wZlpQiDZAWgooVwJJMKhepo/y/hmKrCCp2cUrKqaIoATcKVjHFvj3CvJDMB8pP00BdSuYLyPX/5ghSiKjF9qS4IRXKM98GEduc0CNqGTQ9o9bvWyOkQjDveVWrQF1Ir4eHwmIbM5RXL6Mh8qe5QlYSIah73ipVYk6K3LVtIStFds2qMS/zRW0hM7NUXl3HvMj3yCB8X83UhWQpQom1kKZ8f/s2X9+8CcAvL1/yw/PnnPV62alj1KTix+1tvlxf57f9Xb578ic9Y7LTCnGsNR3rdkzvkKtFSgMP797h/tYWNaWoKcX9rS0e3r2TnTZGTSp+/vweX21ukEjBZx+tsbnQyE4rTF26x6y3nVp2IAAbjQa3WivZYW61VthovF/UUOoX6+tvx/4+OGD3rD02LwS1HKnPfeYISgjvJ5KQvE/q7/v7fPv4SfA0wEBW4rhuL7FprjTuzl67zYujw+wwL44O2WuPR+BlUr/54zFdo8fmhsS1d+clNma0Pnj6jEc7O3S1pqs1j3Z2ePD02dicSUklR8R6VQVLSlHPkW9CMkmpAB1jOHb4HS87k3qPNWmpDDp5LlRG7DRIJYcw13ljiJL+/2nItEgFEDEjtsyAnSapefATW1LAVlUqvlXBqkqjvzR0lerbW/BFW8sr3c8Ov4NXxJrIIesqFc/eQhFcn+e8xOqIYvNI9ektFEVbt7X7iXU8eF5SKfnp3raT1EnhehZeYvtxvLK50ODT1dW3f18nNU9vIRQ9x6DyEtuLlAp2z9r89eof+sby6+7elVKHuPQWQtJ3zLJeVQElVQbThmtFgG/EAnQdr9ws0c0OXIG32E6ERvK0k2fN3mK71karDqYRA84vEikiFuD8AxJ7niNaKSr2IscVrDoX9urqJEshsdpa2h9A1J5bk7t2LyQWoG3cyo8q086ZBgghVls48/jhqtC2hr7HXVlYLMAbo2eyQjBY3uh8uXVIELEApzMYtSfav0EaTGzHmplKCW1rctWtWYKJZZASOsb3Gk8PXWs59UwBQ4KKBTgxOndpMk1oa3l9TUfNheBiDZZj06vkZvbfuWtMgHMPLpZBCXZs+pWSq7Ecae1VWr2PKGIZvGU4Mtq54z5JejasVGKKZZCvDnWf8wK7a2wurOFQh7+7ooodcqI1JwE2hNCcGs3rgrv/ZZQilkHb7UD3cjWLY9ExlgPd9+oBuPIvN8r92Cw0F9sAAAAASUVORK5CYII=">
+    <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='2' width='60' height='60' rx='17' fill='%230f172a'/%3E%3Crect x='5' y='5' width='54' height='54' rx='14' fill='%231e293b' stroke='%23334155' stroke-width='2'/%3E%3Cpath d='M21 45 43 19' stroke='%23fb7185' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='21' cy='20' r='5' fill='%23fda4af'/%3E%3Ccircle cx='43' cy='44' r='5' fill='%23fda4af'/%3E%3C/svg%3E">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS (Para Excel) -->
@@ -128,6 +128,9 @@
                             <i data-lucide="chevrons-up-down" class="w-4 h-4 absolute right-3 top-2.5 text-slate-500 pointer-events-none"></i>
                             <datalist id="listaAsesores"></datalist>
                         </div>
+                        <button id="btnLimpiarAsesor" type="button" onclick="limpiarFiltroAsesor()" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 rounded-lg px-3 py-2 text-xs font-semibold items-center gap-1.5 whitespace-nowrap transition" title="Quitar el filtro de asesor">
+                            <i data-lucide="x" class="w-3.5 h-3.5 text-rose-400"></i> Quitar filtro
+                        </button>
                         <span id="lblVistaSeleccionada" class="text-xs text-slate-400 whitespace-nowrap">Vista general</span>
                     </div>
                     <span id="cantRegistros" class="text-xs bg-slate-700 px-2.5 py-1 rounded-full text-slate-300 whitespace-nowrap">0 operaciones</span>
@@ -898,6 +901,11 @@
             }
         }
 
+        function limpiarFiltroAsesor() {
+            document.getElementById('inputBuscarAsesor').value = '';
+            cambiarSolapa('RESUMEN');
+        }
+
         function escaparHTML(valor) {
             return String(valor)
                 .replaceAll('&', '&amp;')
@@ -995,6 +1003,9 @@
                 : 'bg-blue-600 border-blue-500';
             document.getElementById('btnResumenGeneral').className = `${resumenActivo ? `${colorActivo} text-white` : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'} border rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition`;
             document.getElementById('lblVistaSeleccionada').innerText = resumenActivo ? 'Vista general' : `Viendo: ${solapaActiva}`;
+            const btnLimpiarAsesor = document.getElementById('btnLimpiarAsesor');
+            btnLimpiarAsesor.classList.toggle('hidden', resumenActivo);
+            btnLimpiarAsesor.classList.toggle('flex', !resumenActivo);
             if (resumenActivo) document.getElementById('inputBuscarAsesor').value = '';
         }
 
