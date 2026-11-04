@@ -250,6 +250,7 @@
         let datosPorAsesorGlobal = new Map();
         let clientesPorAsesorGlobal = new Map();
         let datoPorComitenteGlobal = new Map();
+        let resumenBajaPorAsesorGlobal = new Map();
         let datosElegiblesSubaGlobal = [];
         let datosSubaPorAsesorGlobal = new Map();
         let versionRenderActiva = 0;
@@ -635,6 +636,7 @@
             datosPorAsesorGlobal = new Map();
             clientesPorAsesorGlobal = new Map();
             datoPorComitenteGlobal = new Map();
+            resumenBajaPorAsesorGlobal = new Map();
             const clientesSetPorAsesor = new Map();
 
             for (const dato of datosProcesados) {
@@ -645,6 +647,63 @@
                 clientesSetPorAsesor.get(dato.asesor).add(dato.cliente);
 
                 if (!datoPorComitenteGlobal.has(dato.comitente)) datoPorComitenteGlobal.set(dato.comitente, dato);
+
+                if (!resumenBajaPorAsesorGlobal.has(dato.asesor)) {
+                    resumenBajaPorAsesorGlobal.set(dato.asesor, {
+                        totalVolumen: 0,
+                        totalFeeCobrado: 0,
+                        totalFeeTeorico: 0,
+                        totalPerdida: 0,
+                        perdidaPorMes: {},
+                        conteoAranceles: {},
+                        clientesPorArancel: {},
+                        clientesVistos: new Set(),
+                        filasDiarias: new Map()
+                    });
+                }
+
+                const resumen = resumenBajaPorAsesorGlobal.get(dato.asesor);
+                resumen.totalVolumen += dato.brutoUSD;
+                resumen.totalFeeCobrado += dato.comisionUSD;
+                resumen.totalFeeTeorico += dato.feeTeoricoUSD;
+                resumen.totalPerdida += dato.costoOportunidadUSD;
+
+                const mes = obtenerMesOperacion(dato);
+                if (dato.costoOportunidadUSD > 0) {
+                    resumen.perdidaPorMes[mes] = (resumen.perdidaPorMes[mes] || 0) + dato.costoOportunidadUSD;
+                }
+
+                if (!resumen.clientesVistos.has(dato.comitente)) {
+                    resumen.clientesVistos.add(dato.comitente);
+                    const arancelLimpio = dato.arancelTexto.trim().toUpperCase();
+                    if (arancelLimpio.startsWith('IFA')) {
+                        const matchArancel = arancelLimpio.match(/IFA\s*\d+/);
+                        const etiquetaArancel = matchArancel ? matchArancel[0] : arancelLimpio;
+                        resumen.conteoAranceles[etiquetaArancel] = (resumen.conteoAranceles[etiquetaArancel] || 0) + 1;
+                        if (!resumen.clientesPorArancel[etiquetaArancel]) resumen.clientesPorArancel[etiquetaArancel] = [];
+                        resumen.clientesPorArancel[etiquetaArancel].push({
+                            cliente: dato.cliente,
+                            comitente: dato.comitente,
+                            asesor: dato.asesor
+                        });
+                    }
+                }
+
+                if (!resumen.filasDiarias.has(dato.fechaStr)) {
+                    resumen.filasDiarias.set(dato.fechaStr, {
+                        clave: dato.fechaStr,
+                        objD: dato.fechaObj,
+                        boletos: 0,
+                        bruto: 0,
+                        cobrado: 0,
+                        perdida: 0
+                    });
+                }
+                const filaDiaria = resumen.filasDiarias.get(dato.fechaStr);
+                filaDiaria.boletos++;
+                filaDiaria.bruto += dato.brutoUSD;
+                filaDiaria.cobrado += dato.comisionUSD;
+                filaDiaria.perdida += dato.costoOportunidadUSD;
             }
 
             for (const [asesor, clientes] of clientesSetPorAsesor) {
@@ -653,6 +712,8 @@
                     [...clientes].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
                 );
             }
+
+            for (const resumen of resumenBajaPorAsesorGlobal.values()) delete resumen.clientesVistos;
         }
 
         function ejecutarLogicaEstrategica() {
@@ -756,6 +817,7 @@
                 datosPorAsesorGlobal = new Map();
                 clientesPorAsesorGlobal = new Map();
                 datoPorComitenteGlobal = new Map();
+                resumenBajaPorAsesorGlobal = new Map();
                 datosElegiblesSubaGlobal = [];
                 datosSubaPorAsesorGlobal = new Map();
                 versionRenderActiva++;
@@ -1103,24 +1165,36 @@
             if (esVistaDetalle) datosVista.sort((a, b) => (a.fechaObj.getTime() - b.fechaObj.getTime()) || (a.idOriginal - b.idOriginal));
 
             const filasAgrupadas = {}; 
+            const resumenBajaCache = esVistaDiario ? resumenBajaPorAsesorGlobal.get(solapaActiva) : null;
 
-            const procesarPorLotes = datosVista.length > 50000;
-            if (procesarPorLotes) {
-                await new Promise(resolve => requestAnimationFrame(resolve));
-                if (tokenRender !== versionRenderActiva) return;
-            }
+            if (resumenBajaCache) {
+                totalVolumen = resumenBajaCache.totalVolumen;
+                totalFeeCobrado = resumenBajaCache.totalFeeCobrado;
+                totalFeeTeorico = resumenBajaCache.totalFeeTeorico;
+                totalPerdida = resumenBajaCache.totalPerdida;
+                Object.assign(perdidaPorMes, resumenBajaCache.perdidaPorMes);
+                if (totalPerdida > 0) perdidaPorAsesor[solapaActiva] = totalPerdida;
+                Object.assign(conteoAranceles, resumenBajaCache.conteoAranceles);
+                Object.assign(clientesPorArancel, resumenBajaCache.clientesPorArancel);
+                for (const [fecha, fila] of resumenBajaCache.filasDiarias) filasAgrupadas[fecha] = fila;
+            } else {
+                const procesarPorLotes = datosVista.length > 50000;
+                if (procesarPorLotes) {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    if (tokenRender !== versionRenderActiva) return;
+                }
 
-            for (let indice = 0; indice < datosVista.length; indice++) {
-                const d = datosVista[indice];
-                const valPerdida = modoAnalisis === 'BAJA' ? d.costoOportunidadUSD : d.costoOportunidadSubaUSD;
-                const valTeorico = modoAnalisis === 'BAJA' ? d.feeTeoricoUSD : d.feeTeoricoSubaUSD;
+                for (let indice = 0; indice < datosVista.length; indice++) {
+                    const d = datosVista[indice];
+                    const valPerdida = modoAnalisis === 'BAJA' ? d.costoOportunidadUSD : d.costoOportunidadSubaUSD;
+                    const valTeorico = modoAnalisis === 'BAJA' ? d.feeTeoricoUSD : d.feeTeoricoSubaUSD;
 
-                totalVolumen += d.brutoUSD;
-                totalFeeCobrado += d.comisionUSD;
-                totalFeeTeorico += valTeorico;
-                totalPerdida += valPerdida;
+                    totalVolumen += d.brutoUSD;
+                    totalFeeCobrado += d.comisionUSD;
+                    totalFeeTeorico += valTeorico;
+                    totalPerdida += valPerdida;
 
-                const mes = obtenerMesOperacion(d);
+                    const mes = obtenerMesOperacion(d);
                 
                 if (valPerdida > 0) {
                     perdidaPorMes[mes] = (perdidaPorMes[mes] || 0) + valPerdida;
@@ -1176,9 +1250,10 @@
                     filasAgrupadas[d.fechaStr].perdida += valPerdida;
                 }
 
-                if (procesarPorLotes && indice > 0 && indice % 20000 === 0) {
-                    await new Promise(resolve => requestAnimationFrame(resolve));
-                    if (tokenRender !== versionRenderActiva) return;
+                    if (procesarPorLotes && indice > 0 && indice % 20000 === 0) {
+                        await new Promise(resolve => requestAnimationFrame(resolve));
+                        if (tokenRender !== versionRenderActiva) return;
+                    }
                 }
             }
 
