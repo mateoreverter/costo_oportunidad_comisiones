@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<!-- v43: drill-down de clientes desde la distribución de aranceles -->
+<!-- v44: índices por asesor, renderizado por lotes y buscadores livianos -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Aranceles Balanz</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFYAAAA5CAYAAACs9Nx4AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASeSURBVHhe5Zo9bxs3GIAfkneyLMuxZdcobAfwXiAdUiSAU7RDh075LQU6dArQoUDGokB/S6YO7VA0KRI0Q/MLDMT20PgjdixbHyQ7VEqlS2zzeORJpzybKep0fO69l++9Z7H08SeWCSCAhpQ0pEQish8HxQBtY2gbg6Wc5crsQBk0pGQtSWlKFV0qg0U2pWQtSViQ5Sy5nF8ZMCckqyplUaoSdL6LAJpSsapS5kTcpcc9+ghNqVhWimQSRjMkApaVYlGp7EfBiC5WCUFLlXcL5qEhJCsqiXKxo642RbCiFDUR4cwDkQpBS6XBzzGa2DkhaSVJKZtTUSTQUknQvBvuSCPUhGBZTWaDKsKyUsHkhjnKCIkQLKskO1wZlpQiDZAWgooVwJJMKhepo/y/hmKrCCp2cUrKqaIoATcKVjHFvj3CvJDMB8pP00BdSuYLyPX/5ghSiKjF9qS4IRXKM98GEduc0CNqGTQ9o9bvWyOkQjDveVWrQF1Ir4eHwmIbM5RXL6Mh8qe5QlYSIah73ipVYk6K3LVtIStFds2qMS/zRW0hM7NUXl3HvMj3yCB8X83UhWQpQom1kKZ8f/s2X9+8CcAvL1/yw/PnnPV62alj1KTix+1tvlxf57f9Xb578ic9Y7LTCnGsNR3rdkzvkKtFSgMP797h/tYWNaWoKcX9rS0e3r2TnTZGTSp+/vweX21ukEjBZx+tsbnQyE4rTF26x6y3nVp2IAAbjQa3WivZYW61VthovF/UUOoX6+tvx/4+OGD3rD02LwS1HKnPfeYISgjvJ5KQvE/q7/v7fPv4SfA0wEBW4rhuL7FprjTuzl67zYujw+wwL44O2WuPR+BlUr/54zFdo8fmhsS1d+clNma0Pnj6jEc7O3S1pqs1j3Z2ePD02dicSUklR8R6VQVLSlHPkW9CMkmpAB1jOHb4HS87k3qPNWmpDDp5LlRG7DRIJYcw13ljiJL+/2nItEgFEDEjtsyAnSapefATW1LAVlUqvlXBqkqjvzR0lerbW/BFW8sr3c8Ov4NXxJrIIesqFc/eQhFcn+e8xOqIYvNI9ektFEVbt7X7iXU8eF5SKfnp3raT1EnhehZeYvtxvLK50ODT1dW3f18nNU9vIRQ9x6DyEtuLlAp2z9r89eof+sby6+7elVKHuPQWQtJ3zLJeVQElVQbThmtFgG/EAnQdr9ws0c0OXIG32E6ERvK0k2fN3mK71karDqYRA84vEikiFuD8AxJ7niNaKSr2IscVrDoX9urqJEshsdpa2h9A1J5bk7t2LyQWoG3cyo8q086ZBgghVls48/jhqtC2hr7HXVlYLMAbo2eyQjBY3uh8uXVIELEApzMYtSfav0EaTGzHmplKCW1rctWtWYKJZZASOsb3Gk8PXWs59UwBQ4KKBTgxOndpMk1oa3l9TUfNheBiDZZj06vkZvbfuWtMgHMPLpZBCXZs+pWSq7Ecae1VWr2PKGIZvGU4Mtq54z5JejasVGKKZZCvDnWf8wK7a2wurOFQh7+7ooodcqI1JwE2hNCcGs3rgrv/ZZQilkHb7UD3cjWLY9ExlgPd9+oBuPIvN8r92Cw0F9sAAAAASUVORK5CYII=">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS (Para Excel) -->
@@ -43,9 +44,6 @@
                         <div id="lblEstadoDatos" class="text-sm font-bold text-white mt-0.5">Buscando datos...</div>
                     </div>
                 </div>
-                <button id="btnLimpiar" onclick="limpiarTodo()" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium px-3 py-2.5 rounded-lg flex items-center gap-2 transition text-sm">
-                    <i data-lucide="trash-2" class="w-4 h-4 text-red-400"></i> Limpiar Todo
-                </button>
             </div>
         </header>
 
@@ -143,7 +141,7 @@
                     <i data-lucide="search" class="w-4 h-4"></i> Vista del Asesor: <strong id="lblAsesorActivo" class="text-white">---</strong>
                 </div>
                 <div class="w-full md:w-[450px] flex gap-2">
-                    <input type="text" id="inputClienteAsesor" list="listaClientesAsesor" onchange="aplicarFiltroCliente()" placeholder="Tipeá para buscar un cliente..." class="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    <input type="text" id="inputClienteAsesor" list="listaClientesAsesor" oninput="actualizarSugerenciasClientes()" onchange="aplicarFiltroCliente()" onkeydown="if(event.key === 'Enter') aplicarFiltroCliente()" placeholder="Tipeá para buscar un cliente..." autocomplete="off" class="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                     <datalist id="listaClientesAsesor"></datalist>
                     <button onclick="limpiarFiltrosInternos()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap flex items-center gap-1 shadow-sm border border-slate-600">
                         <i data-lucide="calendar" class="w-4 h-4"></i> Diario
@@ -249,6 +247,12 @@
         let rawData = []; 
         let datosProcesados = [];
         let asesoresUnicosGlobal = []; 
+        let datosPorAsesorGlobal = new Map();
+        let clientesPorAsesorGlobal = new Map();
+        let datoPorComitenteGlobal = new Map();
+        let datosElegiblesSubaGlobal = [];
+        let datosSubaPorAsesorGlobal = new Map();
+        let versionRenderActiva = 0;
         
         let modoAnalisis = 'BAJA'; 
         let solapaActiva = 'RESUMEN'; 
@@ -290,11 +294,16 @@
 
         function actualizarCalculosSuba() {
             const tasaObjetivo = obtenerObjetivoSuba().tasa;
+            datosElegiblesSubaGlobal = [];
+            datosSubaPorAsesorGlobal = new Map();
             datosProcesados.forEach(d => {
                 d.esElegibleSuba = esElegibleParaSuba(d.codigoIFA);
                 if (d.esElegibleSuba) {
                     d.feeTeoricoSubaUSD = d.brutoUSD * tasaObjetivo;
                     d.costoOportunidadSubaUSD = Math.max(0, d.feeTeoricoSubaUSD - d.comisionUSD);
+                    datosElegiblesSubaGlobal.push(d);
+                    if (!datosSubaPorAsesorGlobal.has(d.asesor)) datosSubaPorAsesorGlobal.set(d.asesor, []);
+                    datosSubaPorAsesorGlobal.get(d.asesor).push(d);
                 } else {
                     d.feeTeoricoSubaUSD = d.comisionUSD;
                     d.costoOportunidadSubaUSD = 0;
@@ -371,41 +380,6 @@
             }
             
             if (rawData.length > 0) procesarYRenderizar(true);
-        }
-
-        function limpiarTodo() {
-            rawData = []; datosProcesados = []; asesoresUnicosGlobal = []; 
-            solapaActiva = 'RESUMEN'; filtroFechaActivo = null; modoAnalisis = 'BAJA';
-            clienteSubaActivo = null; mesSubaActivo = null;
-            objetivoSubaActivo = 'IFA2'; fuenteDatosActiva = 'NINGUNA';
-            idGlobalContador = 0; paginaActual = 1;
-            
-            setModoAnalisis('BAJA'); 
-            
-            document.getElementById('inputBuscarAsesor').value = '';
-            document.getElementById('listaAsesores').innerHTML = '';
-            document.getElementById('btnLimpiar').classList.add('hidden');
-            
-            ['kpiVolumen', 'kpiFeeCobrado', 'kpiFeeTeorico', 'kpiPerdida'].forEach(id => {
-                document.getElementById(id).innerText = 'u$s 0,00';
-            });
-            document.getElementById('cantRegistros').innerText = '0 operaciones';
-            document.getElementById('lblVistaSeleccionada').innerText = 'Vista general';
-            document.getElementById('panelFiltroCliente').classList.add('hidden');
-            document.getElementById('panelFiltroFecha').classList.add('hidden');
-            document.getElementById('panelNavegacionSuba').classList.add('hidden');
-            document.getElementById('panelNavegacionSuba').classList.remove('flex');
-            document.getElementById('panelPaginacion').classList.add('hidden');
-            document.getElementById('inputClienteAsesor').value = '';
-            document.getElementById('tablaCuerpo').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">No hay datos disponibles. Recargá la página para volver a leer el archivo JS.</td></tr>';
-            document.getElementById('tablaPie').classList.add('hidden');
-            
-            if (chartMensualInstance) chartMensualInstance.destroy();
-            if (chartAsesoresInstance) chartAsesoresInstance.destroy();
-            if (chartArancelesInstance) chartArancelesInstance.destroy();
-            actualizarEtiquetasObjetivoSuba();
-            actualizarEstadoSelectorAsesor();
-            actualizarEstadoDatos('Recargá para restaurar', 'text-slate-400 border-slate-700 bg-slate-800');
         }
 
         function actualizarEstadoDatos(texto, clases) {
@@ -657,6 +631,30 @@
             return ultimaFecha ? ultimaFecha.fechaStr : null;
         }
 
+        function construirIndicesGlobales() {
+            datosPorAsesorGlobal = new Map();
+            clientesPorAsesorGlobal = new Map();
+            datoPorComitenteGlobal = new Map();
+            const clientesSetPorAsesor = new Map();
+
+            for (const dato of datosProcesados) {
+                if (!datosPorAsesorGlobal.has(dato.asesor)) datosPorAsesorGlobal.set(dato.asesor, []);
+                datosPorAsesorGlobal.get(dato.asesor).push(dato);
+
+                if (!clientesSetPorAsesor.has(dato.asesor)) clientesSetPorAsesor.set(dato.asesor, new Set());
+                clientesSetPorAsesor.get(dato.asesor).add(dato.cliente);
+
+                if (!datoPorComitenteGlobal.has(dato.comitente)) datoPorComitenteGlobal.set(dato.comitente, dato);
+            }
+
+            for (const [asesor, clientes] of clientesSetPorAsesor) {
+                clientesPorAsesorGlobal.set(
+                    asesor,
+                    [...clientes].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+                );
+            }
+        }
+
         function ejecutarLogicaEstrategica() {
             if (rawData.length === 0) {
                 document.getElementById('loader').classList.add('hidden');
@@ -717,22 +715,30 @@
                 if (descLower.includes('compra') || descLower.includes('cpra')) tipoOperacion = "COMPRA";
                 if (descLower.includes('venta') || descLower.includes('vta')) tipoOperacion = "VENTA";
 
+                const mesClave = d.fechaStr && d.fechaStr !== '-'
+                    ? (() => {
+                        const partes = d.fechaStr.split('/');
+                        return partes.length >= 3 ? `${partes[1]}/${partes[2]}` : d.fechaStr;
+                    })()
+                    : 'Sin Fecha';
+
                 return { 
                     ...d, tipoOperacion, brutoUSD, tasaEfectiva, 
                     tasaReferencia, feeTeoricoUSD, costoOportunidadUSD, huboBaja,
                     codigoIFA, esIFA3o4, esElegibleSuba: false,
-                    feeTeoricoSubaUSD: d.comisionUSD, costoOportunidadSubaUSD: 0
+                    feeTeoricoSubaUSD: d.comisionUSD, costoOportunidadSubaUSD: 0,
+                    mesClave
                 };
             });
 
+            construirIndicesGlobales();
             actualizarCalculosSuba();
 
-            asesoresUnicosGlobal = [...new Set(datosProcesados.map(d => d.asesor))].sort();
+            asesoresUnicosGlobal = [...datosPorAsesorGlobal.keys()].sort();
             renderizarSelectorAsesores(asesoresUnicosGlobal);
             
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('loader').classList.remove('flex');
-            document.getElementById('btnLimpiar').classList.remove('hidden');
             if (fuenteDatosActiva === 'AUTOMATICA') {
                 const fechaActualizacion = obtenerFechaActualizacionReporte();
                 actualizarEstadoDatos(fechaActualizacion || 'Sin fecha válida', 'text-emerald-300 border-emerald-800/60 bg-emerald-950/30');
@@ -747,6 +753,12 @@
                 rawData = [];
                 datosProcesados = [];
                 asesoresUnicosGlobal = [];
+                datosPorAsesorGlobal = new Map();
+                clientesPorAsesorGlobal = new Map();
+                datoPorComitenteGlobal = new Map();
+                datosElegiblesSubaGlobal = [];
+                datosSubaPorAsesorGlobal = new Map();
+                versionRenderActiva++;
                 idGlobalContador = 0;
                 paginaActual = 1;
                 listaGlobalA_Paginar = [];
@@ -930,19 +942,33 @@
                 return;
             }
 
-            const baseAsesor = datosProcesados.filter(d => d.asesor === solapaActiva);
-            const clientesDelAsesor = [...new Set(baseAsesor.map(d => d.cliente))].sort();
-            const datalist = document.getElementById('listaClientesAsesor');
-            datalist.innerHTML = '';
-            clientesDelAsesor.forEach(c => {
-                datalist.innerHTML += `<option value="${c}"></option>`;
-            });
             document.getElementById('inputClienteAsesor').value = '';
+            document.getElementById('listaClientesAsesor').innerHTML = '';
             document.getElementById('lblAsesorActivo').innerText = solapaActiva;
             document.getElementById('panelFiltroCliente').classList.remove('hidden');
+            actualizarSugerenciasClientes();
+        }
+
+        function actualizarSugerenciasClientes() {
+            if (solapaActiva === 'RESUMEN') return;
+            const clientes = clientesPorAsesorGlobal.get(solapaActiva) || [];
+            const termino = document.getElementById('inputClienteAsesor').value.trim().toLocaleLowerCase('es');
+            const sugerencias = [];
+
+            for (const cliente of clientes) {
+                if (!termino || cliente.toLocaleLowerCase('es').includes(termino)) {
+                    sugerencias.push(cliente);
+                    if (sugerencias.length >= 100) break;
+                }
+            }
+
+            document.getElementById('listaClientesAsesor').innerHTML = sugerencias
+                .map(cliente => `<option value="${escaparHTML(cliente)}"></option>`)
+                .join('');
         }
 
         function obtenerMesOperacion(dato) {
+            if (dato.mesClave) return dato.mesClave;
             if (!dato.fechaStr || dato.fechaStr === '-') return 'Sin Fecha';
             const partes = dato.fechaStr.split('/');
             return partes.length >= 3 ? `${partes[1]}/${partes[2]}` : dato.fechaStr;
@@ -976,7 +1002,7 @@
                 return;
             }
 
-            const datoCliente = datosProcesados.find(d => d.comitente === clienteSubaActivo);
+            const datoCliente = datoPorComitenteGlobal.get(clienteSubaActivo);
             const nombreCliente = datoCliente ? datoCliente.cliente : clienteSubaActivo;
             const contexto = mesSubaActivo
                 ? `${solapaActiva} · ${nombreCliente} (${clienteSubaActivo}) · ${mesSubaActivo}`
@@ -1021,8 +1047,9 @@
             lucide.createIcons();
         }
 
-        function procesarYRenderizar(reiniciarPagina = false) {
+        async function procesarYRenderizar(reiniciarPagina = false) {
             if (datosProcesados.length === 0) return;
+            const tokenRender = ++versionRenderActiva;
             if (reiniciarPagina) paginaActual = 1;
 
             let totalVolumen = 0, totalFeeCobrado = 0, totalFeeTeorico = 0, totalPerdida = 0;
@@ -1042,16 +1069,20 @@
             const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null);
             const esVistaDetalle = (modoAnalisis === 'BAJA' && !esVistaResumen && (filtroCliente !== 'TODOS' || filtroFechaActivo !== null));
 
-            let baseDatos = datosProcesados;
-            if (modoAnalisis === 'SUBA') {
-                baseDatos = datosProcesados.filter(d => d.esElegibleSuba);
+            let baseDatos;
+            if (esVistaResumen) {
+                baseDatos = modoAnalisis === 'SUBA' ? datosElegiblesSubaGlobal : datosProcesados;
+            } else {
+                baseDatos = modoAnalisis === 'SUBA'
+                    ? (datosSubaPorAsesorGlobal.get(solapaActiva) || [])
+                    : (datosPorAsesorGlobal.get(solapaActiva) || []);
             }
 
             if (esVistaResumen) {
                 datosVista = baseDatos;
                 document.getElementById('panelFiltroFecha').classList.add('hidden');
             } else {
-                datosVista = baseDatos.filter(d => d.asesor === solapaActiva);
+                datosVista = baseDatos;
                 if (esFlujoSuba) {
                     if (clienteSubaActivo) datosVista = datosVista.filter(d => d.comitente === clienteSubaActivo);
                     if (mesSubaActivo) datosVista = datosVista.filter(d => obtenerMesOperacion(d) === mesSubaActivo);
@@ -1061,7 +1092,8 @@
                     document.getElementById('panelFiltroFecha').classList.remove('hidden');
                     document.getElementById('lblFechaFiltro').innerText = filtroFechaActivo;
                 } else if (filtroCliente !== 'TODOS') {
-                    datosVista = datosVista.filter(d => d.cliente.toLowerCase().includes(filtroCliente.toLowerCase()) || d.comitente.includes(filtroCliente));
+                    const filtroNormalizado = filtroCliente.toLocaleLowerCase('es');
+                    datosVista = datosVista.filter(d => d.cliente.toLocaleLowerCase('es').includes(filtroNormalizado) || d.comitente.includes(filtroCliente));
                     document.getElementById('panelFiltroFecha').classList.add('hidden');
                 } else { document.getElementById('panelFiltroFecha').classList.add('hidden'); }
             }
@@ -1072,7 +1104,14 @@
 
             const filasAgrupadas = {}; 
 
-            datosVista.forEach(d => {
+            const procesarPorLotes = datosVista.length > 50000;
+            if (procesarPorLotes) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                if (tokenRender !== versionRenderActiva) return;
+            }
+
+            for (let indice = 0; indice < datosVista.length; indice++) {
+                const d = datosVista[indice];
                 const valPerdida = modoAnalisis === 'BAJA' ? d.costoOportunidadUSD : d.costoOportunidadSubaUSD;
                 const valTeorico = modoAnalisis === 'BAJA' ? d.feeTeoricoUSD : d.feeTeoricoSubaUSD;
 
@@ -1136,7 +1175,14 @@
                     filasAgrupadas[d.fechaStr].cobrado += d.comisionUSD; 
                     filasAgrupadas[d.fechaStr].perdida += valPerdida;
                 }
-            });
+
+                if (procesarPorLotes && indice > 0 && indice % 20000 === 0) {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    if (tokenRender !== versionRenderActiva) return;
+                }
+            }
+
+            if (tokenRender !== versionRenderActiva) return;
 
             if (esVistaResumen) {
                 listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => {
@@ -1422,3 +1468,4 @@
     </script>
 </body>
 </html>
+
