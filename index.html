@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v45: acceso rápido para quitar asesor y favicon vectorial -->
+<!-- v46: navegación de bajas por asesor, mes, día y boletos -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -147,7 +147,7 @@
                     <input type="text" id="inputClienteAsesor" list="listaClientesAsesor" oninput="actualizarSugerenciasClientes()" onchange="aplicarFiltroCliente()" onkeydown="if(event.key === 'Enter') aplicarFiltroCliente()" placeholder="Tipeá para buscar un cliente..." autocomplete="off" class="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                     <datalist id="listaClientesAsesor"></datalist>
                     <button onclick="limpiarFiltrosInternos()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap flex items-center gap-1 shadow-sm border border-slate-600">
-                        <i data-lucide="calendar" class="w-4 h-4"></i> Diario
+                        <i data-lucide="calendar-days" class="w-4 h-4"></i> Meses
                     </button>
                 </div>
             </div>
@@ -158,8 +158,8 @@
                     <i data-lucide="calendar-search" class="w-4 h-4 text-blue-400"></i>
                     <span>Viendo detalle de operaciones del día: <strong id="lblFechaFiltro" class="text-white font-mono text-base"></strong></span>
                 </div>
-                <button onclick="limpiarFiltrosInternos()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm">
-                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Volver al Diario
+                <button onclick="volverDiasBaja()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Volver a los días
                 </button>
             </div>
 
@@ -172,6 +172,17 @@
                 <button onclick="volverSuba()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm whitespace-nowrap">
                     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
                     <span id="lblVolverSuba">Volver</span>
+                </button>
+            </div>
+
+            <!-- Navegación del drill-down mensual de Pérdida por Bajas -->
+            <div id="panelNavegacionBaja" class="hidden px-5 py-2.5 bg-blue-900/30 border-b border-blue-800/50 items-center justify-between gap-4 text-sm text-blue-200">
+                <div class="flex items-center gap-2 min-w-0">
+                    <i data-lucide="calendar-range" class="w-4 h-4 text-blue-400 shrink-0"></i>
+                    <strong id="lblNavegacionBaja" class="text-white truncate"></strong>
+                </div>
+                <button onclick="volverMesesBaja()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1 shadow-sm whitespace-nowrap">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Volver a meses
                 </button>
             </div>
 
@@ -263,6 +274,7 @@
         let filtroFechaActivo = null; 
         let clienteSubaActivo = null;
         let mesSubaActivo = null;
+        let mesBajaActivo = null;
         let objetivoSubaActivo = 'IFA2';
         let fuenteDatosActiva = 'NINGUNA';
 
@@ -339,8 +351,11 @@
             modoAnalisis = modo;
             clienteSubaActivo = null;
             mesSubaActivo = null;
+            mesBajaActivo = null;
             document.getElementById('panelNavegacionSuba').classList.add('hidden');
             document.getElementById('panelNavegacionSuba').classList.remove('flex');
+            document.getElementById('panelNavegacionBaja').classList.add('hidden');
+            document.getElementById('panelNavegacionBaja').classList.remove('flex');
             
             // UI Toggle
             if(modo === 'BAJA') {
@@ -661,6 +676,7 @@
                         conteoAranceles: {},
                         clientesPorArancel: {},
                         clientesVistos: new Set(),
+                        filasMensuales: new Map(),
                         filasDiarias: new Map()
                     });
                 }
@@ -675,6 +691,21 @@
                 if (dato.costoOportunidadUSD > 0) {
                     resumen.perdidaPorMes[mes] = (resumen.perdidaPorMes[mes] || 0) + dato.costoOportunidadUSD;
                 }
+
+                if (!resumen.filasMensuales.has(mes)) {
+                    resumen.filasMensuales.set(mes, {
+                        clave: mes,
+                        boletos: 0,
+                        bruto: 0,
+                        cobrado: 0,
+                        perdida: 0
+                    });
+                }
+                const filaMensual = resumen.filasMensuales.get(mes);
+                filaMensual.boletos++;
+                filaMensual.bruto += dato.brutoUSD;
+                filaMensual.cobrado += dato.comisionUSD;
+                filaMensual.perdida += dato.costoOportunidadUSD;
 
                 if (!resumen.clientesVistos.has(dato.comitente)) {
                     resumen.clientesVistos.add(dato.comitente);
@@ -831,6 +862,7 @@
                 filtroFechaActivo = null;
                 clienteSubaActivo = null;
                 mesSubaActivo = null;
+                mesBajaActivo = null;
                 modoAnalisis = 'BAJA';
                 objetivoSubaActivo = 'IFA2';
             },
@@ -865,11 +897,18 @@
         function limpiarFiltrosInternos() {
             document.getElementById('inputClienteAsesor').value = '';
             filtroFechaActivo = null;
+            mesBajaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function volverDiasBaja() {
+            filtroFechaActivo = null;
             procesarYRenderizar(true);
         }
 
         function aplicarFiltroCliente() {
             filtroFechaActivo = null;
+            mesBajaActivo = null;
             procesarYRenderizar(true);
         }
 
@@ -1087,13 +1126,49 @@
             panel.classList.add('flex');
         }
 
+        function verMesBaja(mesCodificado) {
+            if (modoAnalisis !== 'BAJA' || solapaActiva === 'RESUMEN') return;
+            mesBajaActivo = decodeURIComponent(mesCodificado);
+            filtroFechaActivo = null;
+            document.getElementById('inputClienteAsesor').value = '';
+            procesarYRenderizar(true);
+        }
+
+        function volverMesesBaja() {
+            if (modoAnalisis !== 'BAJA') return;
+            mesBajaActivo = null;
+            filtroFechaActivo = null;
+            procesarYRenderizar(true);
+        }
+
+        function actualizarNavegacionBaja() {
+            const panel = document.getElementById('panelNavegacionBaja');
+            const debeMostrar = modoAnalisis === 'BAJA'
+                && solapaActiva !== 'RESUMEN'
+                && Boolean(mesBajaActivo)
+                && filtroFechaActivo === null;
+
+            if (!debeMostrar) {
+                panel.classList.add('hidden');
+                panel.classList.remove('flex');
+                return;
+            }
+
+            document.getElementById('lblNavegacionBaja').innerText = `${solapaActiva} · ${mesBajaActivo} · Vista diaria`;
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+        }
+
         function cambiarSolapa(solapa) {
             solapaActiva = solapa;
             filtroFechaActivo = null;
             clienteSubaActivo = null;
             mesSubaActivo = null;
+            mesBajaActivo = null;
             document.getElementById('panelNavegacionSuba').classList.add('hidden');
             document.getElementById('panelNavegacionSuba').classList.remove('flex');
+            document.getElementById('panelNavegacionBaja').classList.add('hidden');
+            document.getElementById('panelNavegacionBaja').classList.remove('flex');
             
             if (solapaActiva !== 'RESUMEN') {
                 if (modoAnalisis === 'SUBA') {
@@ -1139,7 +1214,8 @@
             const esVistaSubaClientes = esFlujoSuba && !clienteSubaActivo;
             const esVistaSubaMeses = esFlujoSuba && !!clienteSubaActivo && !mesSubaActivo;
             const esVistaSubaDias = esFlujoSuba && !!clienteSubaActivo && !!mesSubaActivo;
-            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null);
+            const esVistaBajaMeses = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null && !mesBajaActivo);
+            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null && !!mesBajaActivo);
             const esVistaDetalle = (modoAnalisis === 'BAJA' && !esVistaResumen && (filtroCliente !== 'TODOS' || filtroFechaActivo !== null));
 
             let baseDatos;
@@ -1168,15 +1244,19 @@
                     const filtroNormalizado = filtroCliente.toLocaleLowerCase('es');
                     datosVista = datosVista.filter(d => d.cliente.toLocaleLowerCase('es').includes(filtroNormalizado) || d.comitente.includes(filtroCliente));
                     document.getElementById('panelFiltroFecha').classList.add('hidden');
+                } else if (mesBajaActivo) {
+                    datosVista = datosVista.filter(d => obtenerMesOperacion(d) === mesBajaActivo);
+                    document.getElementById('panelFiltroFecha').classList.add('hidden');
                 } else { document.getElementById('panelFiltroFecha').classList.add('hidden'); }
             }
 
             actualizarNavegacionSuba();
+            actualizarNavegacionBaja();
 
             if (esVistaDetalle) datosVista.sort((a, b) => (a.fechaObj.getTime() - b.fechaObj.getTime()) || (a.idOriginal - b.idOriginal));
 
             const filasAgrupadas = {}; 
-            const resumenBajaCache = esVistaDiario ? resumenBajaPorAsesorGlobal.get(solapaActiva) : null;
+            const resumenBajaCache = esVistaBajaMeses ? resumenBajaPorAsesorGlobal.get(solapaActiva) : null;
 
             if (resumenBajaCache) {
                 totalVolumen = resumenBajaCache.totalVolumen;
@@ -1187,7 +1267,7 @@
                 if (totalPerdida > 0) perdidaPorAsesor[solapaActiva] = totalPerdida;
                 Object.assign(conteoAranceles, resumenBajaCache.conteoAranceles);
                 Object.assign(clientesPorArancel, resumenBajaCache.clientesPorArancel);
-                for (const [fecha, fila] of resumenBajaCache.filasDiarias) filasAgrupadas[fecha] = fila;
+                for (const [mes, fila] of resumenBajaCache.filasMensuales) filasAgrupadas[mes] = fila;
             } else {
                 const procesarPorLotes = datosVista.length > 50000;
                 if (procesarPorLotes) {
@@ -1253,6 +1333,12 @@
                     filasAgrupadas[d.fechaStr].bruto += d.brutoUSD;
                     filasAgrupadas[d.fechaStr].cobrado += d.comisionUSD;
                     filasAgrupadas[d.fechaStr].perdida += valPerdida;
+                } else if (esVistaBajaMeses) {
+                    if (!filasAgrupadas[mes]) filasAgrupadas[mes] = { clave: mes, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
+                    filasAgrupadas[mes].boletos++;
+                    filasAgrupadas[mes].bruto += d.brutoUSD;
+                    filasAgrupadas[mes].cobrado += d.comisionUSD;
+                    filasAgrupadas[mes].perdida += valPerdida;
                 } else if (esVistaDiario) {
                     if (!filasAgrupadas[d.fechaStr]) filasAgrupadas[d.fechaStr] = { clave: d.fechaStr, objD: d.fechaObj, boletos: 0, bruto: 0, cobrado: 0, perdida: 0 };
                     filasAgrupadas[d.fechaStr].boletos++; 
@@ -1280,7 +1366,7 @@
                     if (b.perdida !== a.perdida) return b.perdida - a.perdida;
                     return a.cliente.localeCompare(b.cliente);
                 });
-            } else if (esVistaSubaMeses) {
+            } else if (esVistaSubaMeses || esVistaBajaMeses) {
                 listaGlobalA_Paginar = Object.values(filasAgrupadas).sort((a,b) => {
                     const [mesA, anioA] = a.clave.split('/').map(Number);
                     const [mesB, anioB] = b.clave.split('/').map(Number);
@@ -1309,8 +1395,10 @@
             if (esVistaResumen) {
                 thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4">Asesor</th><th class="py-3 px-4 text-center">Op. Realizadas</th><th class="py-3 px-4 text-right">Volumen Bruto (USD)</th><th class="py-3 px-4 text-right">Fee Cobrado (USD)</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
                 tfoot.innerHTML = `<tr><td colspan="2" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Total Acumulado:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
-            } else if (esVistaSubaClientes || esVistaSubaMeses || esVistaSubaDias) {
-                const primeraColumna = esVistaSubaClientes ? 'Cliente / Comitente' : (esVistaSubaMeses ? 'Mes' : 'Día');
+            } else if (esVistaSubaClientes || esVistaSubaMeses || esVistaSubaDias || esVistaBajaMeses) {
+                const primeraColumna = esVistaSubaClientes
+                    ? 'Cliente / Comitente'
+                    : ((esVistaSubaMeses || esVistaBajaMeses) ? 'Mes' : 'Día');
                 thead.innerHTML = `<tr><th class="py-3 px-4 w-1/4">${primeraColumna}</th><th class="py-3 px-4 text-center">Operaciones</th><th class="py-3 px-4 text-right">Volumen Bruto (USD)</th><th class="py-3 px-4 text-right">Fee Cobrado (USD)</th><th class="py-3 px-4 text-right">${headerColText}</th></tr>`;
                 tfoot.innerHTML = `<tr><td colspan="2" class="py-4 px-4 uppercase text-slate-300 text-xs tracking-wider">Total Acumulado:</td><td class="py-4 px-4 text-right font-mono text-white">u$s ${totalVolumen.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono text-emerald-400">u$s ${totalFeeCobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="py-4 px-4 text-right font-mono ${kpiColorClass} ${kpiBgClass}">u$s ${totalPerdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
             } else if (esVistaDiario) {
@@ -1446,7 +1534,8 @@
             const esVistaSubaClientes = esFlujoSuba && !clienteSubaActivo;
             const esVistaSubaMeses = esFlujoSuba && !!clienteSubaActivo && !mesSubaActivo;
             const esVistaSubaDias = esFlujoSuba && !!clienteSubaActivo && !!mesSubaActivo;
-            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null);
+            const esVistaBajaMeses = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null && !mesBajaActivo);
+            const esVistaDiario = (modoAnalisis === 'BAJA' && !esVistaResumen && filtroCliente === 'TODOS' && filtroFechaActivo === null && !!mesBajaActivo);
 
             const rowColorClass = modoAnalisis === 'BAJA' ? 'text-red-400 bg-red-950/20' : 'text-purple-400 bg-purple-950/20';
 
@@ -1491,6 +1580,16 @@
                 tbody.innerHTML = datosPagina.map(f => `
                     <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
                         <td class="py-3 px-4 font-medium text-white">${f.clave}</td>
+                        <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
+                        <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-right font-mono font-bold ${f.perdida > 0 ? rowColorClass : 'text-slate-500'}">u$s ${f.perdida.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            } else if (esVistaBajaMeses) {
+                tbody.innerHTML = datosPagina.map(f => `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/40">
+                        <td class="py-3 px-4 font-medium text-white"><button onclick="verMesBaja('${encodeURIComponent(f.clave)}')" class="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1">${f.clave} <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button></td>
                         <td class="py-3 px-4 text-center font-mono text-slate-300">${f.boletos}</td>
                         <td class="py-3 px-4 text-right font-mono text-white">u$s ${f.bruto.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td class="py-3 px-4 text-right font-mono text-emerald-400">u$s ${f.cobrado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
